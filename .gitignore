@@ -1,0 +1,16 @@
+# CC:Tweaked Config
+config.lua
+
+# Logs
+*.log
+
+# Backup Dateien
+*.bak
+*~
+
+# Test Dateien
+test_*.lua
+
+# OS Dateien
+.DS_Store
+Thumbs.db
