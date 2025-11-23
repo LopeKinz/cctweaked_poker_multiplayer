@@ -70,6 +70,7 @@ Diese können in der `config.lua` angepasst werden.
 
 - Chips werden über die Truhe verwaltet
 - Items in der Truhe = Chips (1 Item = 1 Chip)
+- Standard Chip-Item: **Diamanten** (minecraft:diamond)
 - Optional: Banksystem über RS Bridge für automatisches Item-Management
 
 ## Konfiguration

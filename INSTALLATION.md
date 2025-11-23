@@ -23,7 +23,7 @@ Detaillierte Anleitung für die Installation und Konfiguration des Poker Multipl
 - 1x Player Detector (Advanced Peripherals)
 - 1x RS Bridge (Optional, für ME System Integration)
 - Netzwerkkabel
-- Items für Chips (z.B. Goldbarren, Diamanten, etc.)
+- **~1000 Diamanten** pro Spieler für Chips (Standard-Item)
 
 ## Schritt 1: Hardware aufbauen
 
@@ -143,8 +143,9 @@ Oder mit einem einfachen Skript:
 
 Lege Items in die Truhen der Clients:
 - **1 Item = 1 Chip** im Spiel
-- Empfohlen: 1000 Items pro Spieler für Standard-Spiel
-- Beispiel-Items: Goldbarren, Diamanten, Smaragde, etc.
+- **Standard: Diamanten** (minecraft:diamond)
+- Empfohlen: 1000 Diamanten pro Spieler für Standard-Spiel
+- Alternative: Beliebige andere Items (in config.lua konfigurierbar)
 
 ## Schritt 5: System starten
 

@@ -70,7 +70,7 @@ local function findPeripherals()
 
     -- RS Bridge (optional)
     if config.useBank then
-        client.rsbridge = peripheral.find("rsBridge") or
+        client.rsbridge = peripheral.find("rs_bridge") or
                          peripheral.wrap(config.rsBridgeSide)
         if client.rsbridge then
             print("RS Bridge gefunden")

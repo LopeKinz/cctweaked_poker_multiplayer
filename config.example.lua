@@ -9,7 +9,7 @@ return {
 
     -- Bank-System
     useBank = false,              -- true = RS Bridge Integration aktivieren
-    chipItem = nil,               -- Item-ID für Chips (nil = auto-detect)
+    chipItem = "minecraft:diamond",  -- Item-ID für Chips (Standard: Diamanten)
 
     -- Server-Einstellungen
     minPlayers = 2,               -- Minimum Spieler zum Starten

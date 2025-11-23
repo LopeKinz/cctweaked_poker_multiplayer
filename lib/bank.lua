@@ -3,7 +3,7 @@ local bank = {}
 
 bank.config = {
     rsBridgeSide = "right",
-    chipItem = nil, -- Auto-detect oder konfigurierbar
+    chipItem = "minecraft:diamond", -- Standard: Diamanten
     minWithdraw = 1,
     maxWithdraw = 10000
 }
@@ -17,7 +17,7 @@ function bank.init(config)
     end
 
     -- Finde RS Bridge
-    local bridge = peripheral.find("rsBridge") or
+    local bridge = peripheral.find("rs_bridge") or
                    peripheral.wrap(bank.config.rsBridgeSide)
 
     if not bridge then
@@ -266,7 +266,7 @@ function bank.createManager(rsBridgeSide, chestSide)
     }
 
     -- Initialisiere Bridge
-    manager.bridge = peripheral.find("rsBridge") or
+    manager.bridge = peripheral.find("rs_bridge") or
                      peripheral.wrap(rsBridgeSide or bank.config.rsBridgeSide)
 
     -- Initialisiere Truhe
@@ -283,11 +283,11 @@ function bank.createManager(rsBridgeSide, chestSide)
         return nil
     end
 
-    -- Auto-detect Chip Item
-    manager.chipItem = bank.detectChipItem(manager.chest)
+    -- Auto-detect Chip Item oder verwende Diamanten als Standard
+    manager.chipItem = bank.detectChipItem(manager.chest) or bank.config.chipItem
 
     if manager.chipItem then
-        print("Chip-Item erkannt: " .. manager.chipItem)
+        print("Chip-Item: " .. manager.chipItem)
     else
         print("WARNUNG: Kein Chip-Item erkannt")
     end
