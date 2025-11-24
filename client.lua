@@ -117,15 +117,14 @@ end
 -- Verbindet zu Server
 local function connectToServer()
     client.ui:clear()
-    client.ui:showMessage("Suche Server...", nil, ui.COLORS.BLUE)
+    client.ui:showMessage("Suche Server...\nWarte bis Server online ist...", nil, ui.COLORS.BLUE)
 
-    print("Suche Server...")
-    client.serverId = network.findServer(config.serverTimeout)
+    print("Suche Server (endlos bis gefunden)...")
 
-    if not client.serverId then
-        client.ui:showMessage("Kein Server gefunden!", 3, ui.COLORS.RED)
-        error("Kein Server gefunden!")
-    end
+    -- Versuche unendlich Server zu finden (timeout = 0)
+    client.serverId = network.findServer(0)
+
+    print("Server gefunden! ID: " .. client.serverId)
 
     -- Erkenne Spieler
     client.ui:showMessage("Warte auf Spieler...", nil, ui.COLORS.YELLOW)
@@ -142,23 +141,28 @@ local function connectToServer()
     -- Verbinde
     client.ui:showMessage("Verbinde...", nil, ui.COLORS.BLUE)
 
-    network.send(client.serverId, network.MSG.JOIN, {
-        playerName = client.playerName
-    })
+    -- Versuche endlos mit Server zu verbinden
+    local connected = false
+    while not connected do
+        network.send(client.serverId, network.MSG.JOIN, {
+            playerName = client.playerName
+        })
 
-    -- Warte auf Willkommen
-    local senderId, data = network.waitFor(network.MSG.WELCOME, 5, client.serverId)
+        -- Warte auf Willkommen
+        local senderId, data = network.waitFor(network.MSG.WELCOME, 5, client.serverId)
 
-    if not senderId then
-        client.ui:showMessage("Verbindung fehlgeschlagen!", 3, ui.COLORS.RED)
-        error("Keine Antwort vom Server")
+        if senderId then
+            client.playerId = data.playerId
+            client.connected = true
+            connected = true
+            print("Verbunden! ID: " .. client.playerId)
+            client.ui:showMessage("Verbunden!", 2, ui.COLORS.GREEN)
+        else
+            print("Keine Antwort, versuche erneut...")
+            client.ui:showMessage("Verbinde...\nVersuche erneut...", nil, ui.COLORS.YELLOW)
+            sleep(2)
+        end
     end
-
-    client.playerId = data.playerId
-    client.connected = true
-
-    print("Verbunden! ID: " .. client.playerId)
-    client.ui:showMessage("Verbunden!", 2, ui.COLORS.GREEN)
 end
 
 -- Zeichnet Lobby-Screen
