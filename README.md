@@ -30,7 +30,7 @@ Ein vollständiges 4-Spieler Texas Hold'em Poker-Spiel für CC:Tweaked und Advan
 ### Automatische Installation (Empfohlen)
 
 ```lua
-wget run https://raw.githubusercontent.com/IhrUsername/cctweaked_poker_multiplayer/main/installer.lua
+wget run https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/installer.lua
 ```
 
 ### Manuelle Installation
