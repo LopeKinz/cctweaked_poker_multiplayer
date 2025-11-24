@@ -512,6 +512,70 @@ function ui:updateTimer()
     end
 end
 
+-- Zeigt Poker Hand Rankings Cheat Sheet
+function ui:showHandRankings()
+    local dialogHeight = 24
+    local dialogWidth = math.min(50, self.width - 4)
+    local x = math.floor((self.width - dialogWidth) / 2)
+    local y = math.floor((self.height - dialogHeight) / 2)
+
+    -- Dialog mit Schatten
+    self:drawBox(x + 1, y + 1, dialogWidth, dialogHeight, ui.COLORS.CARD_BORDER)  -- Schatten
+    self:drawBox(x, y, dialogWidth, dialogHeight, ui.COLORS.PANEL_DARK)
+    self:drawBorder(x, y, dialogWidth, dialogHeight, ui.COLORS.TABLE_BORDER)
+
+    -- Titel
+    local titleY = y + 1
+    self:drawCenteredText(titleY, "=== POKER HAND RANKINGS ===", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL_DARK)
+    self:drawCenteredText(titleY + 1, "(Beste bis Schlechteste)", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
+
+    -- Hand Rankings (von besten nach schlechtesten)
+    local rankings = {
+        {name = "1. Royal Flush", desc = "A-K-Q-J-10 gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
+        {name = "2. Straight Flush", desc = "5 aufeinander folgende Karten, gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
+        {name = "3. Four of a Kind", desc = "4 Karten gleichen Werts", color = ui.COLORS.CHIPS_GREEN},
+        {name = "4. Full House", desc = "3 gleiche + 2 gleiche", color = ui.COLORS.CHIPS_GREEN},
+        {name = "5. Flush", desc = "5 Karten gleicher Farbe", color = ui.COLORS.CHIPS_BLUE},
+        {name = "6. Straight", desc = "5 aufeinander folgende Karten", color = ui.COLORS.CHIPS_BLUE},
+        {name = "7. Three of a Kind", desc = "3 Karten gleichen Werts", color = ui.COLORS.TEXT_WHITE},
+        {name = "8. Two Pair", desc = "2 Paare", color = ui.COLORS.TEXT_WHITE},
+        {name = "9. Pair", desc = "2 Karten gleichen Werts", color = ui.COLORS.TEXT_WHITE},
+        {name = "10. High Card", desc = "Höchste Karte", color = ui.COLORS.TEXT_WHITE},
+    }
+
+    local currentY = y + 4
+    for _, ranking in ipairs(rankings) do
+        self:drawText(x + 2, currentY, ranking.name, ranking.color, ui.COLORS.PANEL_DARK)
+        currentY = currentY + 1
+        self:drawText(x + 4, currentY, ranking.desc, ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
+        currentY = currentY + 1
+    end
+
+    -- Close Button
+    local btnWidth = 20
+    local btnHeight = 3
+    local btnX = math.floor((dialogWidth - btnWidth) / 2) + x
+    local btnY = y + dialogHeight - 4
+
+    self:addButton("rankings_close", btnX, btnY, btnWidth, btnHeight, "SCHLIESSEN", nil, ui.COLORS.BTN_CALL)
+
+    -- Warte auf Close
+    while true do
+        local event, p1, p2, p3 = os.pullEvent()
+
+        if event == "monitor_touch" then
+            local touchX, touchY = p2, p3
+            local buttonId = self:handleTouch(touchX, touchY)
+
+            if buttonId == "rankings_close" then
+                break
+            end
+        end
+    end
+
+    self:clearButtons()
+end
+
 -- Zeigt Overlay-Nachricht
 function ui:showMessage(message, duration, color, large)
     local lines = {}
