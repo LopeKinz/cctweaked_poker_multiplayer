@@ -2,7 +2,7 @@
 -- Diese Datei automatisch beim Computerstart ausgeführt
 
 local function detectMode()
-    -- Prüfe ob Server oder Client
+    -- Prüfe ob Server oder Client basierend auf Hardware
     local hasMonitor = peripheral.find("monitor") ~= nil
 
     if hasMonitor then
@@ -15,6 +15,17 @@ end
 local function main()
     print("=== Poker System Startup ===")
     print("")
+
+    -- Starte Daemon im Hintergrund
+    if fs.exists("daemon.lua") then
+        print("Starte Daemon im Hintergrund...")
+        shell.run("bg daemon.lua")
+        sleep(0.5)
+    else
+        print("WARNUNG: daemon.lua nicht gefunden!")
+        print("Netzwerk-Steuerung nicht verfügbar.")
+        sleep(1)
+    end
 
     local mode = detectMode()
 
