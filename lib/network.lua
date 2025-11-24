@@ -100,17 +100,19 @@ function network.waitFor(msgType, timeout, fromSender)
 end
 
 -- Findet Server
+-- timeout: Sekunden bis Abbruch, 0 = unendlich versuchen
 function network.findServer(timeout)
     timeout = timeout or 5
-    local serverId = rednet.lookup(network.PROTOCOL, "poker_server")
+    local infinite = (timeout == 0)
 
+    local serverId = rednet.lookup(network.PROTOCOL, "poker_server")
     if serverId then
         return serverId
     end
 
-    -- Warte auf Broadcast
+    -- Warte auf Server
     local startTime = os.epoch("utc")
-    while (os.epoch("utc") - startTime) / 1000 < timeout do
+    while infinite or (os.epoch("utc") - startTime) / 1000 < timeout do
         serverId = rednet.lookup(network.PROTOCOL, "poker_server")
         if serverId then
             return serverId
