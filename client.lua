@@ -60,7 +60,7 @@ local function findPeripherals()
     end
 
     -- Player Detector
-    client.playerDetector = peripheral.find("playerDetector") or
+    client.playerDetector = peripheral.find("player_detector") or
                             peripheral.wrap(config.playerDetectorSide)
     if client.playerDetector then
         print("Player Detector gefunden")
