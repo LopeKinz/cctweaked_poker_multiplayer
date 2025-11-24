@@ -266,6 +266,31 @@ local config = {
 
 ## Updates installieren
 
+### Methode 1: Netzwerk-Update (Empfohlen für Multiplayer)
+
+Alle Computer im Netzwerk auf einmal updaten:
+
+```lua
+> update
+```
+Wähle Option **2** (Netzwerk-Update)
+
+Dies updated automatisch alle Computer im Netzwerk und startet sie neu.
+
+**Setup für automatische Updates:**
+1. Starte auf allen Computern: `update` → Option **3** (Update-Daemon)
+2. Auf einem Computer: `update` → Option **2** (Netzwerk-Update)
+3. Alle Computer werden automatisch geupdated
+
+### Methode 2: Einzelner Computer
+
+```lua
+> update
+```
+Wähle Option **1** (Lokales Update)
+
+### Methode 3: Installer (Legacy)
+
 ```lua
 > wget run https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/installer.lua
 ```
