@@ -102,6 +102,26 @@ client
 5. "Ready" auf Touchscreen drücken
 6. Spiel beginnt automatisch wenn 2-4 Spieler bereit
 
+## Updates
+
+### Netzwerk-Update (alle Computer auf einmal)
+
+```lua
+> update
+```
+
+Wähle **Option 2** um alle Computer im Netzwerk zu updaten.
+
+Alternativ: Wähle **Option 3** auf allen Computern um Update-Daemon zu starten, dann **Option 2** auf einem Computer.
+
+### Einzelner Computer
+
+```lua
+> update
+```
+
+Wähle **Option 1** für lokales Update.
+
 ## Fehlerbehebung
 
 ### Monitor wird nicht erkannt
