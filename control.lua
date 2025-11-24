@@ -49,15 +49,16 @@ local function scanNetwork()
     computers = {}
 
     -- Sende Ping
-    rednet.broadcast(CMD.PING, PROTOCOL)
+    rednet.broadcast({type = CMD.PING}, PROTOCOL)
+    printColor("Ping gesendet...", colors.lightGray)
 
-    printColor("Warte auf Antworten (5 Sekunden)...", colors.lightGray)
+    printColor("Warte auf Antworten (10 Sekunden)...", colors.lightGray)
     local startTime = os.epoch("utc")
 
-    while (os.epoch("utc") - startTime) / 1000 < 5 do
+    while (os.epoch("utc") - startTime) / 1000 < 10 do
         local senderId, message, protocol = rednet.receive(PROTOCOL, 1)
 
-        if senderId and protocol == PROTOCOL then
+        if senderId and protocol == PROTOCOL and type(message) == "table" then
             if message.type == CMD.PONG then
                 if not computers[senderId] then
                     computers[senderId] = {
