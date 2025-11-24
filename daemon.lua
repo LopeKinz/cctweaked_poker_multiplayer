@@ -10,7 +10,8 @@ local CMD = {
     STOP = "STOP",
     REBOOT = "REBOOT",
     STATUS = "STATUS",
-    STATUS_RESPONSE = "STATUS_RESPONSE"
+    STATUS_RESPONSE = "STATUS_RESPONSE",
+    UPDATE = "UPDATE"
 }
 
 -- Ermittelt Computer-Typ basierend auf Hardware und Konfiguration
@@ -88,6 +89,81 @@ local function stopProgram()
     print("[Daemon] Programme gestoppt")
 end
 
+-- Update-Funktion
+local function updateSystem()
+    print("[Daemon] Starte Update...")
+
+    local computerType = getComputerType()
+
+    -- GitHub Repository URL
+    local baseUrl = "https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/"
+
+    -- Gemeinsame Dateien
+    local commonFiles = {
+        "lib/poker.lua",
+        "lib/network.lua",
+        "daemon.lua",
+        "startup.lua",
+        "update.lua"
+    }
+
+    -- Computer-spezifische Dateien
+    local typeFiles = {}
+    if computerType == "server" then
+        typeFiles = {"server.lua"}
+    elseif computerType == "client" then
+        typeFiles = {
+            "client.lua",
+            "lib/ui.lua",
+            "lib/bank.lua",
+            "config.example.lua"
+        }
+    end
+
+    -- Download Dateien
+    local function downloadFile(file)
+        local url = baseUrl .. file
+        print("  Lade " .. file .. "...")
+
+        -- Erstelle Verzeichnis falls nötig
+        local dir = fs.getDir(file)
+        if dir ~= "" and not fs.exists(dir) then
+            fs.makeDir(dir)
+        end
+
+        -- Download
+        shell.run("wget", url, file)
+
+        return fs.exists(file)
+    end
+
+    -- Download alle Dateien
+    local success = true
+
+    for _, file in ipairs(commonFiles) do
+        if not downloadFile(file) then
+            success = false
+            print("  FEHLER: " .. file)
+        end
+    end
+
+    for _, file in ipairs(typeFiles) do
+        if not downloadFile(file) then
+            success = false
+            print("  FEHLER: " .. file)
+        end
+    end
+
+    if success then
+        print("[Daemon] Update erfolgreich!")
+        print("[Daemon] Neustart in 3 Sekunden...")
+        sleep(3)
+        os.reboot()
+    else
+        print("[Daemon] Update fehlgeschlagen!")
+    end
+end
+
 -- Hauptschleife
 local function main()
     print("=== Poker Control Daemon ===")
@@ -135,6 +211,10 @@ local function main()
                 print("Neustart in 2 Sekunden...")
                 sleep(2)
                 os.reboot()
+
+            elseif cmd == CMD.UPDATE then
+                print("[" .. os.date("%H:%M:%S") .. "] UPDATE von #" .. senderId)
+                updateSystem()
 
             elseif cmd == CMD.STATUS then
                 -- Status-Abfrage

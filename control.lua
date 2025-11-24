@@ -23,7 +23,8 @@ local CMD = {
     STOP = "STOP",
     REBOOT = "REBOOT",
     STATUS = "STATUS",
-    STATUS_RESPONSE = "STATUS_RESPONSE"
+    STATUS_RESPONSE = "STATUS_RESPONSE",
+    UPDATE = "UPDATE"
 }
 
 -- Computer-Liste
@@ -144,8 +145,9 @@ local function showMenu()
     printColor("3. Start - Starte alle Programme", colors.white)
     printColor("4. Stop - Stoppe alle Programme", colors.white)
     printColor("5. Reboot - Starte alle Computer neu", colors.white)
-    printColor("6. Custom - Einzelnen Computer steuern", colors.white)
-    printColor("7. Beenden", colors.white)
+    printColor("6. Update - Update alle Computer", colors.white)
+    printColor("7. Custom - Einzelnen Computer steuern", colors.white)
+    printColor("8. Beenden", colors.white)
     print("")
 end
 
@@ -189,6 +191,30 @@ local function rebootAll()
     computers = {}
 end
 
+-- Update alle Computer
+local function updateAll()
+    printColor("WARNUNG: Alle Computer werden geupdatet und neu gestartet!", colors.red)
+    write("Fortfahren? (j/n): ")
+    local answer = read()
+
+    if answer:lower() ~= "j" then
+        printColor("Abgebrochen.", colors.yellow)
+        return
+    end
+
+    printColor("Sende Update-Befehl an alle Computer...", colors.yellow)
+    broadcastCommand(CMD.UPDATE)
+
+    sleep(1)
+    printColor("Befehle gesendet!", colors.green)
+    printColor("Computer werden jetzt geupdatet und neu gestartet...", colors.lightGray)
+    sleep(3)
+
+    -- Lösche Computer-Liste (da alle neu starten)
+    computers = {}
+    printColor("Update-Prozess gestartet. Führe 'Scan' aus um Status zu prüfen.", colors.yellow)
+end
+
 -- Custom Steuerung
 local function customControl()
     showComputers()
@@ -209,7 +235,8 @@ local function customControl()
     printColor("1. Start", colors.white)
     printColor("2. Stop", colors.white)
     printColor("3. Reboot", colors.white)
-    printColor("4. Zurück", colors.white)
+    printColor("4. Update", colors.white)
+    printColor("5. Zurück", colors.white)
     print("")
 
     write("Auswahl: ")
@@ -224,6 +251,11 @@ local function customControl()
     elseif choice == "3" then
         sendCommand(id, CMD.REBOOT)
         printColor("Reboot-Befehl gesendet!", colors.green)
+        computers[id] = nil
+    elseif choice == "4" then
+        sendCommand(id, CMD.UPDATE)
+        printColor("Update-Befehl gesendet!", colors.green)
+        printColor("Computer wird geupdatet und neu gestartet...", colors.lightGray)
         computers[id] = nil
     else
         return
@@ -272,9 +304,12 @@ local function main()
             rebootAll()
 
         elseif choice == "6" then
-            customControl()
+            updateAll()
 
         elseif choice == "7" then
+            customControl()
+
+        elseif choice == "8" then
             term.clear()
             term.setCursorPos(1, 1)
             printColor("Steuerung beendet.", colors.green)
