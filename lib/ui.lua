@@ -558,9 +558,9 @@ function ui:showPlayerSelection(players)
         if i >= 10 then break end
     end
 
-    -- "Manuell eingeben" Button
+    -- "Erneut scannen" Button
     btnY = btnY + 1
-    self:addButton("manual_input", x + 4, btnY, btnWidth, btnHeight, "Manuell eingeben", nil, ui.COLORS.PANEL)
+    self:addButton("rescan", x + 4, btnY, btnWidth, btnHeight, "Erneut scannen", nil, ui.COLORS.PANEL)
 
     -- "Als Zuschauer beitreten" Button
     btnY = btnY + btnHeight + 1
@@ -577,27 +577,10 @@ function ui:showPlayerSelection(players)
             local buttonId = self:handleTouch(touchX, touchY)
 
             if buttonId then
-                if buttonId == "manual_input" then
-                    -- Manuelle Eingabe
-                    self:clear(ui.COLORS.TABLE_FELT)
-                    self:drawBox(x, y, width, 10, ui.COLORS.PANEL)
-                    self:drawBorder(x, y, width, 10, ui.COLORS.TABLE_BORDER)
-                    self:drawCenteredText(y + 1, "Spieler-Name eingeben:", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
-
-                    -- Input-Feld
-                    self:drawBox(x + 4, y + 4, width - 8, 1, colors.black)
-                    self.monitor.setCursorPos(x + 4, y + 4)
-                    self.monitor.setTextColor(colors.white)
-                    self.monitor.setBackgroundColor(colors.black)
-                    self.monitor.setCursorBlink(true)
-
-                    local input = read()
-                    self.monitor.setCursorBlink(false)
-
-                    if input and #input > 0 then
-                        selectedPlayer = input
-                        break
-                    end
+                if buttonId == "rescan" then
+                    -- Erneut scannen - Rückgabe eines speziellen Wertes
+                    selectedPlayer = "__RESCAN__"
+                    break
                 elseif buttonId == "spectator" then
                     -- Zuschauer-Modus
                     selectedPlayer = "Zuschauer_" .. os.getComputerID()

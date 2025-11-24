@@ -116,23 +116,35 @@ end
 
 -- Spieler auswählen
 local function selectPlayer()
-    print("Erkenne Spieler in der Nähe...")
+    while true do
+        print("Erkenne Spieler in der Nähe...")
 
-    local players = detectPlayer()
+        local players = detectPlayer()
 
-    if not players or #players == 0 then
-        -- Keine Spieler erkannt - trotzdem Auswahlliste zeigen
-        print("Keine Spieler erkannt")
-        client.ui:showMessage("Keine Spieler in Reichweite!\nManuell eingeben möglich", 2, ui.COLORS.BTN_CHECK)
-    else
-        -- Spieler erkannt - Info anzeigen
-        print("Spieler erkannt: " .. #players)
-        client.ui:showMessage("Spieler erkannt: " .. #players .. "\nWähle deinen Namen", 2, ui.COLORS.BTN_CALL)
+        if not players or #players == 0 then
+            -- Keine Spieler erkannt - trotzdem Auswahhliste zeigen
+            print("Keine Spieler erkannt")
+            client.ui:showMessage("Keine Spieler in Reichweite!\nErneut scannen möglich", 2, ui.COLORS.BTN_CHECK)
+        else
+            -- Spieler erkannt - Info anzeigen
+            print("Spieler erkannt: " .. #players)
+            client.ui:showMessage("Spieler erkannt: " .. #players .. "\nWähle deinen Namen", 2, ui.COLORS.BTN_CALL)
+        end
+
+        -- IMMER Auswahlliste zeigen (auch bei 0 oder 1 Spieler)
+        -- Nutzer kann auch bewusst "Zuschauer werden" oder erneut scannen
+        local selectedName = client.ui:showPlayerSelection(players or {})
+
+        -- Wenn "__RESCAN__" zurückgegeben wird, scanne erneut
+        if selectedName == "__RESCAN__" then
+            print("Scanne erneut...")
+            client.ui:showMessage("Scanne erneut...", 1, ui.COLORS.BTN_CHECK)
+            -- Loop continues
+        else
+            -- Gültiger Name ausgewählt
+            return selectedName
+        end
     end
-
-    -- IMMER Auswahlliste zeigen (auch bei 0 oder 1 Spieler)
-    -- Nutzer kann auch bewusst "Zuschauer werden" oder manuell eingeben
-    return client.ui:showPlayerSelection(players or {})
 end
 
 -- Verbindet zu Server
