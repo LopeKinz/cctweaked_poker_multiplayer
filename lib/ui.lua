@@ -415,9 +415,13 @@ function ui:drawRaiseSlider(min, max, current, x, y, width)
         self:drawBox(x, y, fillWidth, 2, ui.COLORS.BTN_RAISE)
     end
 
-    -- Min/Max Labels
+    -- Min/Max Labels (mit Bounds-Check)
     self:drawText(x, y + 3, "Min:" .. min, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
-    self:drawText(x + width - 8, y + 3, "Max:" .. max, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    local maxLabelText = "Max:" .. max
+    local maxLabelX = x + width - #maxLabelText
+    if maxLabelX > x then
+        self:drawText(maxLabelX, y + 3, maxLabelText, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    end
 
     -- Pot Button in der Mitte
     local potText = "POT"

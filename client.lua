@@ -250,8 +250,8 @@ local function drawPokerTable()
             local isMe = player.id == client.playerId
             local isActive = i == state.currentPlayerIndex
             local isDealer = i == state.dealerIndex
-            local isSmallBlind = i == ((state.dealerIndex % #state.players) + 1)
-            local isBigBlind = i == (((state.dealerIndex + 1) % #state.players) + 1)
+            local isSmallBlind = i == state.smallBlindIndex
+            local isBigBlind = i == state.bigBlindIndex
 
             client.ui:drawPlayerBox(
                 tablePos,
@@ -339,9 +339,12 @@ local function drawLobby()
 end
 
 -- Zeichnet Aktions-Buttons
-local function drawActionButtons(canCheck, currentBet, myBet, myChips)
+local function drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
     -- Entferne alte Buttons
     client.ui:clearButtons()
+
+    -- minRaise default (sollte vom Server kommen)
+    minRaise = minRaise or 20
 
     local btnY = client.ui.height - 2
     local btnWidth = math.floor((client.ui.width - 15) / 5)
@@ -383,15 +386,17 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips)
     end
 
     -- Raise
-    if myChips > (currentBet - myBet) then
+    local callAmount = currentBet - myBet
+    local raiseMinAmount = callAmount + minRaise
+    if myChips > raiseMinAmount then
         client.ui:addButton("raise", startX + (btnWidth + spacing) * 2, btnY, btnWidth, btnHeight, "RAISE", function()
             -- Zeige Raise-Dialog
-            local minRaise = (currentBet - myBet) + 20
+            local minRaiseAmount = raiseMinAmount
             local maxRaise = myChips
             local pot = client.gameState.pot or 0
 
             drawPokerTable()  -- Redraw vor Dialog
-            local result = client.ui:showRaiseInput(minRaise, maxRaise, pot)
+            local result = client.ui:showRaiseInput(minRaiseAmount, maxRaise, pot)
 
             if result.action == "raise" then
                 network.send(client.serverId, network.MSG.ACTION, {action = "raise", amount = result.amount})
@@ -426,7 +431,7 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips)
         info = info .. "Your Chips: " .. myChips
         client.ui:showMessage(info, 3, ui.COLORS.PANEL)
         drawPokerTable()
-        drawActionButtons(canCheck, currentBet, myBet, myChips)
+        drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
     end, ui.COLORS.PANEL)
 end
 
@@ -464,7 +469,8 @@ local function handleYourTurn(data)
             data.canCheck,
             data.currentBet,
             myPlayer.bet,
-            myPlayer.chips
+            myPlayer.chips,
+            data.minRaise
         )
 
         -- Starte Timer

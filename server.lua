@@ -463,15 +463,45 @@ endHand = function()
     end
 end
 
+-- Konvertiert activePlayers-Index zu players-Index
+local function activeIndexToPlayerIndex(activeIndex)
+    if not activeIndex or activeIndex < 1 or activeIndex > #game.activePlayers then
+        return nil
+    end
+
+    local activePlayer = game.activePlayers[activeIndex]
+    if not activePlayer then return nil end
+
+    for i, player in ipairs(game.players) do
+        if player.id == activePlayer.id then
+            return i
+        end
+    end
+    return nil
+end
+
 -- Broadcast Spielstatus
 broadcastGameState = function()
+    -- Berechne Blind-Positionen
+    local smallBlindIndex = nil
+    local bigBlindIndex = nil
+
+    if game.round ~= "waiting" and #game.activePlayers >= 2 then
+        local sbActiveIndex = (game.dealerIndex % #game.activePlayers) + 1
+        local bbActiveIndex = ((game.dealerIndex + 1) % #game.activePlayers) + 1
+        smallBlindIndex = activeIndexToPlayerIndex(sbActiveIndex)
+        bigBlindIndex = activeIndexToPlayerIndex(bbActiveIndex)
+    end
+
     local state = {
         round = game.round,
         pot = game.pot,
         currentBet = game.currentBet,
         communityCards = game.communityCards,
-        dealerIndex = game.dealerIndex,
-        currentPlayerIndex = game.currentPlayerIndex,
+        dealerIndex = activeIndexToPlayerIndex(game.dealerIndex),
+        currentPlayerIndex = activeIndexToPlayerIndex(game.currentPlayerIndex),
+        smallBlindIndex = smallBlindIndex,
+        bigBlindIndex = bigBlindIndex,
         players = {}
     }
 
