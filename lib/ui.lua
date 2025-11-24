@@ -415,9 +415,13 @@ function ui:drawRaiseSlider(min, max, current, x, y, width)
         self:drawBox(x, y, fillWidth, 2, ui.COLORS.BTN_RAISE)
     end
 
-    -- Min/Max Labels
+    -- Min/Max Labels (mit Bounds-Check)
     self:drawText(x, y + 3, "Min:" .. min, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
-    self:drawText(x + width - 8, y + 3, "Max:" .. max, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    local maxLabelText = "Max:" .. max
+    local maxLabelX = x + width - #maxLabelText
+    if maxLabelX > x then
+        self:drawText(maxLabelX, y + 3, maxLabelText, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    end
 
     -- Pot Button in der Mitte
     local potText = "POT"
@@ -522,7 +526,8 @@ end
 
 -- Spieler-Auswahl Dialog
 function ui:showPlayerSelection(players)
-    local dialogHeight = math.min(#players * 3 + 8, self.height - 4)
+    -- +3 für Titel, +3 für jeden Spieler, +3 für "Manuell", +3 für "Zuschauer"
+    local dialogHeight = math.min(#players * 3 + 14, self.height - 4)
     local y = math.floor((self.height - dialogHeight) / 2)
     local width = math.min(40, self.width - 8)
     local x = math.floor((self.width - width) / 2)
@@ -553,9 +558,13 @@ function ui:showPlayerSelection(players)
         if i >= 10 then break end
     end
 
-    -- "Manuell eingeben" Button
+    -- "Erneut scannen" Button
     btnY = btnY + 1
-    self:addButton("manual_input", x + 4, btnY, btnWidth, btnHeight, "Manuell eingeben", nil, ui.COLORS.PANEL)
+    self:addButton("rescan", x + 4, btnY, btnWidth, btnHeight, "Erneut scannen", nil, ui.COLORS.PANEL)
+
+    -- "Als Zuschauer beitreten" Button
+    btnY = btnY + btnHeight + 1
+    self:addButton("spectator", x + 4, btnY, btnWidth, btnHeight, "Als Zuschauer beitreten", nil, ui.COLORS.BTN_CHECK)
 
     -- Warte auf Auswahl
     local selectedPlayer = nil
@@ -568,27 +577,14 @@ function ui:showPlayerSelection(players)
             local buttonId = self:handleTouch(touchX, touchY)
 
             if buttonId then
-                if buttonId == "manual_input" then
-                    -- Manuelle Eingabe
-                    self:clear(ui.COLORS.TABLE_FELT)
-                    self:drawBox(x, y, width, 10, ui.COLORS.PANEL)
-                    self:drawBorder(x, y, width, 10, ui.COLORS.TABLE_BORDER)
-                    self:drawCenteredText(y + 1, "Spieler-Name eingeben:", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
-
-                    -- Input-Feld
-                    self:drawBox(x + 4, y + 4, width - 8, 1, colors.black)
-                    self.monitor.setCursorPos(x + 4, y + 4)
-                    self.monitor.setTextColor(colors.white)
-                    self.monitor.setBackgroundColor(colors.black)
-                    self.monitor.setCursorBlink(true)
-
-                    local input = read()
-                    self.monitor.setCursorBlink(false)
-
-                    if input and #input > 0 then
-                        selectedPlayer = input
-                        break
-                    end
+                if buttonId == "rescan" then
+                    -- Erneut scannen - Rückgabe eines speziellen Wertes
+                    selectedPlayer = "__RESCAN__"
+                    break
+                elseif buttonId == "spectator" then
+                    -- Zuschauer-Modus
+                    selectedPlayer = "Zuschauer_" .. os.getComputerID()
+                    break
                 else
                     -- Spieler aus Liste gewählt
                     local playerIndex = tonumber(buttonId:match("player_(%d+)"))

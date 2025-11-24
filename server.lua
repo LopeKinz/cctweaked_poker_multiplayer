@@ -4,13 +4,16 @@ local network = require("lib.network")
 
 -- Konfiguration
 local config = {
-    minPlayers = 2,
+    minPlayers = 2,  -- Mindestens 2 Spieler
     maxPlayers = 4,
     smallBlind = 10,
     bigBlind = 20,
     startingChips = 1000,
     turnTimeout = 60
 }
+
+-- Spielleiter (erster Spieler der beitritt)
+local gameMaster = nil
 
 -- Spielstatus
 local game = {
@@ -65,13 +68,20 @@ local function addPlayer(clientId, playerName)
 
     table.insert(game.players, player)
 
-    print("Spieler " .. playerName .. " beigetreten (" .. clientId .. ")")
+    -- Erster Spieler wird Spielleiter
+    if not gameMaster then
+        gameMaster = clientId
+        print("Spieler " .. playerName .. " ist jetzt SPIELLEITER (" .. clientId .. ")")
+    else
+        print("Spieler " .. playerName .. " beigetreten (" .. clientId .. ")")
+    end
 
     -- Sende Willkommensnachricht
     network.send(clientId, network.MSG.WELCOME, {
         playerId = clientId,
         playerCount = #game.players,
-        config = config
+        config = config,
+        isGameMaster = (clientId == gameMaster)
     })
 
     -- Benachrichtige andere Spieler
@@ -119,26 +129,29 @@ local function getPlayer(clientId)
     return nil
 end
 
--- Setzt Spieler als bereit
+-- Setzt Spieler als bereit (nur Spielleiter darf starten)
 local function setPlayerReady(clientId, ready)
-    local player = getPlayer(clientId)
-    if player then
-        player.ready = ready
-        print("Spieler " .. player.name .. " ist " .. (ready and "bereit" or "nicht bereit"))
-
-        -- Prüfe ob genug Spieler bereit sind
-        local readyCount = 0
-        for _, p in ipairs(game.players) do
-            if p.ready then
-                readyCount = readyCount + 1
-            end
-        end
-
-        if readyCount >= config.minPlayers and readyCount == #game.players then
-            -- Starte Spiel
-            startGame()
-        end
+    -- Nur Spielleiter darf das Spiel starten
+    if clientId ~= gameMaster then
+        network.send(clientId, network.MSG.ERROR, {message = "Nur der Spielleiter kann das Spiel starten!"})
+        return
     end
+
+    -- Prüfe ob mindestens 2 Spieler da sind
+    if #game.players < config.minPlayers then
+        network.send(clientId, network.MSG.ERROR, {message = "Mindestens " .. config.minPlayers .. " Spieler benötigt!"})
+        return
+    end
+
+    print("Spielleiter startet das Spiel mit " .. #game.players .. " Spielern")
+
+    -- Alle Spieler als bereit markieren
+    for _, p in ipairs(game.players) do
+        p.ready = true
+    end
+
+    -- Starte Spiel
+    startGame()
 end
 
 -- Mischt und verteilt Karten
@@ -463,15 +476,46 @@ endHand = function()
     end
 end
 
+-- Konvertiert activePlayers-Index zu players-Index
+local function activeIndexToPlayerIndex(activeIndex)
+    if not activeIndex or activeIndex < 1 or activeIndex > #game.activePlayers then
+        return nil
+    end
+
+    local activePlayer = game.activePlayers[activeIndex]
+    if not activePlayer then return nil end
+
+    for i, player in ipairs(game.players) do
+        if player.id == activePlayer.id then
+            return i
+        end
+    end
+    return nil
+end
+
 -- Broadcast Spielstatus
 broadcastGameState = function()
+    -- Berechne Blind-Positionen
+    local smallBlindIndex = nil
+    local bigBlindIndex = nil
+
+    if game.round ~= "waiting" and #game.activePlayers >= 2 then
+        local sbActiveIndex = (game.dealerIndex % #game.activePlayers) + 1
+        local bbActiveIndex = ((game.dealerIndex + 1) % #game.activePlayers) + 1
+        smallBlindIndex = activeIndexToPlayerIndex(sbActiveIndex)
+        bigBlindIndex = activeIndexToPlayerIndex(bbActiveIndex)
+    end
+
     local state = {
         round = game.round,
         pot = game.pot,
         currentBet = game.currentBet,
         communityCards = game.communityCards,
-        dealerIndex = game.dealerIndex,
-        currentPlayerIndex = game.currentPlayerIndex,
+        dealerIndex = activeIndexToPlayerIndex(game.dealerIndex),
+        currentPlayerIndex = activeIndexToPlayerIndex(game.currentPlayerIndex),
+        smallBlindIndex = smallBlindIndex,
+        bigBlindIndex = bigBlindIndex,
+        gameMaster = gameMaster,
         players = {}
     }
 
@@ -531,9 +575,23 @@ local function main()
     end
 end
 
--- Fehlerbehandlung
-local success, err = pcall(main)
-if not success then
-    print("FEHLER: " .. tostring(err))
-    network.close()
+-- Fehlerbehandlung mit Auto-Reboot
+while true do
+    local success, err = pcall(main)
+
+    if not success then
+        print("===================")
+        print("FEHLER: " .. tostring(err))
+        print("===================")
+        print("Automatischer Neustart in 30 Sekunden...")
+        network.close()
+
+        -- 30 Sekunden Wartezeit
+        sleep(30)
+
+        print("Neustart...")
+        os.reboot()
+    else
+        break
+    end
 end
