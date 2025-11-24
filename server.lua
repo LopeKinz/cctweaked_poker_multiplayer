@@ -100,28 +100,95 @@ local function addPlayer(clientId, playerName)
         end
     end
 
+    -- Broadcast aktuellen Spielstatus an alle (damit Lobby aktualisiert wird)
+    broadcastGameState()
+
     return true
 end
 
 -- Entfernt Spieler
 local function removePlayer(clientId)
+    -- Finde den Spieler
+    local playerIndex = nil
+    local playerData = nil
     for i, player in ipairs(game.players) do
         if player.id == clientId then
-            table.remove(game.players, i)
-            print("Spieler " .. player.name .. " hat verlassen")
-
-            -- Benachrichtige andere
-            for _, p in ipairs(game.players) do
-                network.send(p.id, network.MSG.PLAYER_LEFT, {
-                    playerId = clientId,
-                    playerName = player.name
-                })
-            end
-
-            return true
+            playerIndex = i
+            playerData = player
+            break
         end
     end
-    return false
+
+    if not playerData then
+        return false
+    end
+
+    -- Prüfe ob Spieler Spielleiter ist
+    local isGameMaster = (clientId == gameMaster)
+    local isSpectator = playerData.name:match("^Zuschauer_") ~= nil
+
+    if isGameMaster then
+        -- Zähle andere Nicht-Zuschauer Spieler
+        local otherNonSpectators = 0
+        for _, p in ipairs(game.players) do
+            if p.id ~= clientId then
+                local pIsSpectator = p.name:match("^Zuschauer_") ~= nil
+                if not pIsSpectator then
+                    otherNonSpectators = otherNonSpectators + 1
+                end
+            end
+        end
+
+        -- Spielleiter kann nur verlassen wenn keine anderen Spieler da sind
+        if otherNonSpectators > 0 then
+            network.send(clientId, network.MSG.ERROR, {
+                message = "Spielleiter kann nur verlassen wenn alle anderen Spieler das Spiel verlassen haben!"
+            })
+            return false
+        end
+    end
+
+    -- Entferne Spieler
+    table.remove(game.players, playerIndex)
+    print("Spieler " .. playerData.name .. " hat verlassen")
+
+    -- Benachrichtige andere
+    for _, p in ipairs(game.players) do
+        network.send(p.id, network.MSG.PLAYER_LEFT, {
+            playerId = clientId,
+            playerName = playerData.name
+        })
+    end
+
+    -- Wenn Spielleiter verlassen hat und noch Spieler da sind, wähle neuen Spielleiter
+    if isGameMaster and #game.players > 0 then
+        -- Finde ersten Nicht-Zuschauer
+        for _, p in ipairs(game.players) do
+            local pIsSpectator = p.name:match("^Zuschauer_") ~= nil
+            if not pIsSpectator then
+                gameMaster = p.id
+                print("Neuer Spielleiter: " .. p.name .. " (" .. p.id .. ")")
+                break
+            end
+        end
+
+        -- Falls alle Zuschauer sind, setze ersten als Spielleiter
+        if not gameMaster and #game.players > 0 then
+            gameMaster = game.players[1].id
+            print("Neuer Spielleiter (Zuschauer): " .. game.players[1].name)
+        end
+    end
+
+    -- Wenn keine Spieler mehr da sind, setze Spielleiter zurück
+    if #game.players == 0 then
+        gameMaster = nil
+        print("Alle Spieler haben verlassen")
+    end
+
+    -- Broadcast aktuellen Spielstatus an alle
+    broadcastGameState()
+
+    return true
 end
 
 -- Findet Spieler nach ID
