@@ -26,6 +26,16 @@ local game = {
     roundBets = {}
 }
 
+-- Forward declarations
+local startGame
+local placeBet
+local broadcastGameState
+local nextPlayer
+local startBettingRound
+local handlePlayerAction
+local endBettingRound
+local endHand
+
 -- Fügt Spieler hinzu
 local function addPlayer(clientId, playerName)
     if #game.players >= config.maxPlayers then
@@ -147,7 +157,7 @@ local function dealCards()
 end
 
 -- Startet neue Runde
-local function startGame()
+startGame = function()
     print("=== Starte neues Spiel ===")
 
     -- Reset Spielstatus
@@ -196,7 +206,7 @@ local function startGame()
 end
 
 -- Platziert Einsatz
-function placeBet(player, amount)
+placeBet = function(player, amount)
     local actualBet = math.min(amount, player.chips)
     player.chips = player.chips - actualBet
     player.bet = player.bet + actualBet
@@ -210,7 +220,7 @@ function placeBet(player, amount)
 end
 
 -- Startet Wettrunde
-function startBettingRound()
+startBettingRound = function()
     print("=== Wettrunde: " .. game.round .. " ===")
 
     -- Sende aktuellem Spieler "Your Turn"
@@ -250,7 +260,7 @@ function startBettingRound()
 end
 
 -- Verarbeitet Spieler-Aktion
-function handlePlayerAction(clientId, action, amount)
+handlePlayerAction = function(clientId, action, amount)
     local player = getPlayer(clientId)
     if not player then return end
 
@@ -289,7 +299,7 @@ function handlePlayerAction(clientId, action, amount)
 end
 
 -- Nächster Spieler
-function nextPlayer()
+nextPlayer = function()
     local startIndex = game.currentPlayerIndex
 
     repeat
@@ -327,7 +337,7 @@ function isBettingRoundComplete()
 end
 
 -- Beendet Wettrunde
-function endBettingRound()
+endBettingRound = function()
     print("=== Wettrunde beendet ===")
 
     -- Reset Einsätze
@@ -372,7 +382,7 @@ function endBettingRound()
 end
 
 -- Beendet Hand (Showdown)
-function endHand()
+endHand = function()
     print("=== Showdown ===")
 
     -- Zähle aktive Spieler
@@ -454,7 +464,7 @@ function endHand()
 end
 
 -- Broadcast Spielstatus
-function broadcastGameState()
+broadcastGameState = function()
     local state = {
         round = game.round,
         pot = game.pot,
