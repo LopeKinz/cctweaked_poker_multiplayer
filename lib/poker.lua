@@ -165,13 +165,13 @@ function poker.evaluateHand(cards)
     local isStraight, straightHigh = poker.isStraight(cards)
 
     -- Zähle Paare, Drillinge, etc.
-    local pairs = {}
+    local pairRanks = {}
     local threes = {}
     local fours = {}
 
     for rank, count in pairs(rankCounts) do
         if count == 2 then
-            table.insert(pairs, poker.RANK_VALUES[rank])
+            table.insert(pairRanks, poker.RANK_VALUES[rank])
         elseif count == 3 then
             table.insert(threes, poker.RANK_VALUES[rank])
         elseif count == 4 then
@@ -179,7 +179,7 @@ function poker.evaluateHand(cards)
         end
     end
 
-    table.sort(pairs, function(a, b) return a > b end)
+    table.sort(pairRanks, function(a, b) return a > b end)
     table.sort(threes, function(a, b) return a > b end)
     table.sort(fours, function(a, b) return a > b end)
 
@@ -214,12 +214,12 @@ function poker.evaluateHand(cards)
     end
 
     -- Full House
-    if #threes > 0 and (#pairs > 0 or #threes > 1) then
+    if #threes > 0 and (#pairRanks > 0 or #threes > 1) then
         local value = threes[1] * 100
         if #threes > 1 then
             value = value + threes[2]
         else
-            value = value + pairs[1]
+            value = value + pairRanks[1]
         end
         return {
             rank = poker.HAND_RANKS.FULL_HOUSE,
@@ -260,8 +260,8 @@ function poker.evaluateHand(cards)
     end
 
     -- Two Pair
-    if #pairs >= 2 then
-        local value = pairs[1] * 100 + pairs[2]
+    if #pairRanks >= 2 then
+        local value = pairRanks[1] * 100 + pairRanks[2]
         return {
             rank = poker.HAND_RANKS.TWO_PAIR,
             value = value,
@@ -271,10 +271,10 @@ function poker.evaluateHand(cards)
     end
 
     -- One Pair
-    if #pairs == 1 then
+    if #pairRanks == 1 then
         return {
             rank = poker.HAND_RANKS.PAIR,
-            value = pairs[1],
+            value = pairRanks[1],
             name = poker.HAND_NAMES[poker.HAND_RANKS.PAIR],
             cards = sorted
         }
