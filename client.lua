@@ -333,6 +333,20 @@ local function drawLobby()
         client.ui:drawCenteredText(y, "Du schaust zu", ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
         y = y + 1
         client.ui:drawCenteredText(y, "Maximale Spielerzahl erreicht", ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+
+        -- Verlassen Button für Zuschauer
+        local btnWidth = 25
+        local btnHeight = 3
+        local btnX = math.floor((client.ui.width - btnWidth) / 2)
+        local btnY = client.ui.height - 6
+
+        client.ui:addButton("leave", btnX, btnY, btnWidth, btnHeight, "VERLASSEN", function()
+            network.send(client.serverId, network.MSG.LEAVE, {})
+            client.ui:showMessage("Verlasse Spiel...", 2, ui.COLORS.TEXT_WHITE)
+            sleep(1)
+            os.reboot()
+        end, ui.COLORS.BTN_FOLD, true)
+
         return
     end
 
@@ -379,7 +393,7 @@ local function drawLobby()
         local btnWidth = 30
         local btnHeight = 3
         local btnX = math.floor((client.ui.width - btnWidth) / 2)
-        local btnY = client.ui.height - 6
+        local btnY = client.ui.height - 10
 
         local canStart = playerCount >= 2
         local btnText = canStart and "SPIEL STARTEN" or "Mindestens 2 Spieler"
@@ -392,10 +406,32 @@ local function drawLobby()
                 client.ui:showMessage("Starte Spiel...", 2, ui.COLORS.BTN_CALL)
             end
         end, btnColor, canStart)
+
+        -- Verlassen Button für Spielleiter
+        btnY = btnY + btnHeight + 1
+        client.ui:addButton("leave", btnX, btnY, btnWidth, btnHeight, "VERLASSEN", function()
+            network.send(client.serverId, network.MSG.LEAVE, {})
+            client.ui:showMessage("Verlasse Spiel...", 2, ui.COLORS.TEXT_WHITE)
+            sleep(1)
+            os.reboot()
+        end, ui.COLORS.BTN_FOLD, true)
     else
         -- Nicht-Spielleiter warten
-        local y = client.ui.height - 4
+        local y = client.ui.height - 10
         client.ui:drawCenteredText(y, "[WARTE AUF SPIELLEITER...]", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+
+        -- Verlassen Button für normale Spieler
+        local btnWidth = 25
+        local btnHeight = 3
+        local btnX = math.floor((client.ui.width - btnWidth) / 2)
+        local btnY = client.ui.height - 6
+
+        client.ui:addButton("leave", btnX, btnY, btnWidth, btnHeight, "VERLASSEN", function()
+            network.send(client.serverId, network.MSG.LEAVE, {})
+            client.ui:showMessage("Verlasse Spiel...", 2, ui.COLORS.TEXT_WHITE)
+            sleep(1)
+            os.reboot()
+        end, ui.COLORS.BTN_FOLD, true)
     end
 end
 
