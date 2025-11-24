@@ -120,7 +120,42 @@ local function updateSystem()
         }
     end
 
-    -- Download Dateien
+    -- Alle zu verwaltenden Dateien
+    local allFiles = {}
+    for _, file in ipairs(commonFiles) do
+        table.insert(allFiles, file)
+    end
+    for _, file in ipairs(typeFiles) do
+        table.insert(allFiles, file)
+    end
+
+    -- SCHRITT 1: Lösche alte Dateien
+    print("[Daemon] Lösche alte Dateien...")
+    for _, file in ipairs(allFiles) do
+        if fs.exists(file) then
+            fs.delete(file)
+            print("  Gelöscht: " .. file)
+        end
+    end
+
+    -- Lösche auch alte Dateien die nicht mehr gebraucht werden
+    local oldFiles = {
+        "installer.lua",
+        "control.lua",
+        "startup-control.lua"
+    }
+    for _, file in ipairs(oldFiles) do
+        if fs.exists(file) then
+            fs.delete(file)
+            print("  Gelöscht (alt): " .. file)
+        end
+    end
+
+    print("[Daemon] Alte Dateien gelöscht!")
+
+    -- SCHRITT 2: Download neue Dateien
+    print("[Daemon] Lade neue Dateien...")
+
     local function downloadFile(file)
         local url = baseUrl .. file
         print("  Lade " .. file .. "...")
@@ -156,11 +191,13 @@ local function updateSystem()
 
     if success then
         print("[Daemon] Update erfolgreich!")
+        print("[Daemon] Alle Dateien neu installiert!")
         print("[Daemon] Neustart in 3 Sekunden...")
         sleep(3)
         os.reboot()
     else
         print("[Daemon] Update fehlgeschlagen!")
+        print("[Daemon] Einige Dateien konnten nicht geladen werden!")
     end
 end
 
