@@ -393,7 +393,7 @@ local function drawLobby()
         local btnWidth = 30
         local btnHeight = 3
         local btnX = math.floor((client.ui.width - btnWidth) / 2)
-        local btnY = client.ui.height - 10
+        local btnY = client.ui.height - 13
 
         local canStart = playerCount >= 2
         local btnText = canStart and "SPIEL STARTEN" or "Mindestens 2 Spieler"
@@ -407,6 +407,13 @@ local function drawLobby()
             end
         end, btnColor, canStart)
 
+        -- Help Button
+        btnY = btnY + btnHeight + 1
+        client.ui:addButton("help", btnX, btnY, btnWidth, btnHeight, "HAND RANKINGS", function()
+            client.ui:showHandRankings()
+            drawLobby()
+        end, ui.COLORS.BTN_CHECK, true)
+
         -- Verlassen Button für Spielleiter
         btnY = btnY + btnHeight + 1
         client.ui:addButton("leave", btnX, btnY, btnWidth, btnHeight, "VERLASSEN", function()
@@ -417,15 +424,22 @@ local function drawLobby()
         end, ui.COLORS.BTN_FOLD, true)
     else
         -- Nicht-Spielleiter warten
-        local y = client.ui.height - 10
+        local y = client.ui.height - 13
         client.ui:drawCenteredText(y, "[WARTE AUF SPIELLEITER...]", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
 
-        -- Verlassen Button für normale Spieler
+        -- Help Button für normale Spieler
         local btnWidth = 25
         local btnHeight = 3
         local btnX = math.floor((client.ui.width - btnWidth) / 2)
-        local btnY = client.ui.height - 6
+        local btnY = client.ui.height - 9
 
+        client.ui:addButton("help", btnX, btnY, btnWidth, btnHeight, "HAND RANKINGS", function()
+            client.ui:showHandRankings()
+            drawLobby()
+        end, ui.COLORS.BTN_CHECK, true)
+
+        -- Verlassen Button für normale Spieler
+        btnY = btnY + btnHeight + 1
         client.ui:addButton("leave", btnX, btnY, btnWidth, btnHeight, "VERLASSEN", function()
             network.send(client.serverId, network.MSG.LEAVE, {})
             client.ui:showMessage("Verlasse Spiel...", 2, ui.COLORS.TEXT_WHITE)
@@ -444,11 +458,11 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
     minRaise = minRaise or 20
 
     local btnY = client.ui.height - 2
-    local btnWidth = math.floor((client.ui.width - 15) / 5)
+    local btnWidth = math.floor((client.ui.width - 18) / 6)
     local btnHeight = 2
 
     local spacing = 2
-    local totalWidth = btnWidth * 5 + spacing * 4
+    local totalWidth = btnWidth * 6 + spacing * 5
     local startX = math.floor((client.ui.width - totalWidth) / 2)
 
     -- Fold
@@ -520,8 +534,15 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
         client.ui:addButton("allin_disabled", startX + (btnWidth + spacing) * 3, btnY, btnWidth, btnHeight, "ALL-IN", nil, ui.COLORS.BTN_DISABLED, false)
     end
 
+    -- Help Button (Hand Rankings)
+    client.ui:addButton("help", startX + (btnWidth + spacing) * 4, btnY, btnWidth, btnHeight, "HELP", function()
+        client.ui:showHandRankings()
+        drawPokerTable()
+        drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
+    end, ui.COLORS.BTN_CHECK)
+
     -- Info Button
-    client.ui:addButton("info", startX + (btnWidth + spacing) * 4, btnY, btnWidth, btnHeight, "INFO", function()
+    client.ui:addButton("info", startX + (btnWidth + spacing) * 5, btnY, btnWidth, btnHeight, "INFO", function()
         local info = "Pot: " .. (client.gameState.pot or 0) .. "\n"
         info = info .. "Current Bet: " .. currentBet .. "\n"
         info = info .. "Your Bet: " .. myBet .. "\n"

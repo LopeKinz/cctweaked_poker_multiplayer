@@ -391,60 +391,86 @@ function ui:clearButtons()
     self.buttons = {}
 end
 
--- Zeichnet Raise-Slider
-function ui:drawRaiseSlider(min, max, current, x, y, width)
+-- Zeichnet Raise-Buttons mit Inkrement-System
+function ui:drawRaiseButtons(min, max, current, pot, x, y, width)
     x = x or 5
     y = y or self.height - 12
     width = width or self.width - 10
 
-    -- Label
-    self:drawText(x, y - 1, "Raise Amount: " .. current, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    -- Label mit größerem, besserem Stil
+    local labelText = "RAISE: " .. current .. " chips"
+    local labelWidth = #labelText + 4
+    local labelX = x + math.floor((width - labelWidth) / 2)
 
-    -- Slider-Hintergrund
-    self:drawBox(x, y, width, 2, ui.COLORS.PANEL)
+    self:drawBox(labelX, y - 2, labelWidth, 3, ui.COLORS.BTN_RAISE)
+    self:drawBorder(labelX, y - 2, labelWidth, 3, ui.COLORS.TABLE_BORDER)
+    self:drawText(labelX + 2, y, labelText, ui.COLORS.TEXT_WHITE, ui.COLORS.BTN_RAISE)
 
-    -- Slider-Füllung
+    -- Inkrement-Buttons in einer Reihe
+    local btnY = y + 2
+    local btnHeight = 3
+    local btnSpacing = 2
+
+    -- Berechne Button-Breiten für gleichmäßige Verteilung
+    local totalBtns = 5  -- -10, -1, POT, +1, +10
+    local availableWidth = width - (btnSpacing * (totalBtns - 1))
+    local btnWidth = math.floor(availableWidth / totalBtns)
+
+    local currentX = x
+
+    -- -10 Button
+    local canDecrease10 = (current - 10) >= min
+    self:addButton("raise_dec10", currentX, btnY, btnWidth, btnHeight,
+        "-10", nil, ui.COLORS.BTN_FOLD, canDecrease10)
+    currentX = currentX + btnWidth + btnSpacing
+
+    -- -1 Button
+    local canDecrease1 = (current - 1) >= min
+    self:addButton("raise_dec1", currentX, btnY, btnWidth, btnHeight,
+        "-1", nil, ui.COLORS.BTN_FOLD, canDecrease1)
+    currentX = currentX + btnWidth + btnSpacing
+
+    -- POT Button (Mitte)
+    local potValue = math.min(pot, max)
+    self:addButton("raise_pot", currentX, btnY, btnWidth, btnHeight,
+        "POT", nil, ui.COLORS.BTN_ALLIN, true)
+    currentX = currentX + btnWidth + btnSpacing
+
+    -- +1 Button
+    local canIncrease1 = (current + 1) <= max
+    self:addButton("raise_inc1", currentX, btnY, btnWidth, btnHeight,
+        "+1", nil, ui.COLORS.BTN_CALL, canIncrease1)
+    currentX = currentX + btnWidth + btnSpacing
+
+    -- +10 Button
+    local canIncrease10 = (current + 10) <= max
+    self:addButton("raise_inc10", currentX, btnY, btnWidth, btnHeight,
+        "+10", nil, ui.COLORS.BTN_CALL, canIncrease10)
+
+    -- Min/Max Info unter den Buttons
+    local infoY = btnY + btnHeight + 1
+    local minText = "Min: " .. min
+    local maxText = "Max: " .. max
+    self:drawText(x, infoY, minText, ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+    self:drawText(x + width - #maxText, infoY, maxText, ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+
+    -- Fortschrittsbalken für visuelle Darstellung
+    local barY = infoY + 1
+    local barHeight = 1
+    self:drawBox(x, barY, width, barHeight, ui.COLORS.PANEL)
+
     local percent = 0
     if max > min then
         percent = (current - min) / (max - min)
     else
-        percent = 1  -- Wenn nur ein Betrag möglich, volle Füllung
+        percent = 1
     end
     local fillWidth = math.floor(width * percent)
     if fillWidth > 0 then
-        self:drawBox(x, y, fillWidth, 2, ui.COLORS.BTN_RAISE)
+        self:drawBox(x, barY, fillWidth, barHeight, ui.COLORS.BTN_RAISE)
     end
 
-    -- Min/Max Labels (mit Bounds-Check)
-    self:drawText(x, y + 3, "Min:" .. min, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
-    local maxLabelText = "Max:" .. max
-    local maxLabelX = x + width - #maxLabelText
-    if maxLabelX > x then
-        self:drawText(maxLabelX, y + 3, maxLabelText, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
-    end
-
-    -- Pot Button in der Mitte
-    local potText = "POT"
-    local potX = x + math.floor(width / 2) - 2
-    self:addButton("raise_pot", potX, y + 3, 5, 1, potText, nil, ui.COLORS.BTN_RAISE)
-
-    return y + 5  -- Return Y für weitere Elemente
-end
-
--- Slider-Touch-Handler
-function ui:handleSliderTouch(x, y, sliderX, sliderY, sliderWidth, min, max)
-    if y >= sliderY and y < sliderY + 2 then
-        -- Guard gegen Division durch Null
-        if max <= min then
-            return min
-        end
-
-        local percent = (x - sliderX) / sliderWidth
-        percent = math.max(0, math.min(1, percent))
-        local value = math.floor(min + (max - min) * percent)
-        return value
-    end
-    return nil
+    return barY + 2  -- Return Y für weitere Elemente
 end
 
 -- Zeichnet Timer
@@ -484,6 +510,70 @@ function ui:updateTimer()
             self.timerActive = false
         end
     end
+end
+
+-- Zeigt Poker Hand Rankings Cheat Sheet
+function ui:showHandRankings()
+    local dialogHeight = 24
+    local dialogWidth = math.min(50, self.width - 4)
+    local x = math.floor((self.width - dialogWidth) / 2)
+    local y = math.floor((self.height - dialogHeight) / 2)
+
+    -- Dialog mit Schatten
+    self:drawBox(x + 1, y + 1, dialogWidth, dialogHeight, ui.COLORS.CARD_BORDER)  -- Schatten
+    self:drawBox(x, y, dialogWidth, dialogHeight, ui.COLORS.PANEL_DARK)
+    self:drawBorder(x, y, dialogWidth, dialogHeight, ui.COLORS.TABLE_BORDER)
+
+    -- Titel
+    local titleY = y + 1
+    self:drawCenteredText(titleY, "=== POKER HAND RANKINGS ===", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL_DARK)
+    self:drawCenteredText(titleY + 1, "(Beste bis Schlechteste)", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
+
+    -- Hand Rankings (von besten nach schlechtesten)
+    local rankings = {
+        {name = "1. Royal Flush", desc = "A-K-Q-J-10 gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
+        {name = "2. Straight Flush", desc = "5 aufeinander folgende Karten, gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
+        {name = "3. Four of a Kind", desc = "4 Karten gleichen Werts", color = ui.COLORS.CHIPS_GREEN},
+        {name = "4. Full House", desc = "3 gleiche + 2 gleiche", color = ui.COLORS.CHIPS_GREEN},
+        {name = "5. Flush", desc = "5 Karten gleicher Farbe", color = ui.COLORS.CHIPS_BLUE},
+        {name = "6. Straight", desc = "5 aufeinander folgende Karten", color = ui.COLORS.CHIPS_BLUE},
+        {name = "7. Three of a Kind", desc = "3 Karten gleichen Werts", color = ui.COLORS.TEXT_WHITE},
+        {name = "8. Two Pair", desc = "2 Paare", color = ui.COLORS.TEXT_WHITE},
+        {name = "9. Pair", desc = "2 Karten gleichen Werts", color = ui.COLORS.TEXT_WHITE},
+        {name = "10. High Card", desc = "Höchste Karte", color = ui.COLORS.TEXT_WHITE},
+    }
+
+    local currentY = y + 4
+    for _, ranking in ipairs(rankings) do
+        self:drawText(x + 2, currentY, ranking.name, ranking.color, ui.COLORS.PANEL_DARK)
+        currentY = currentY + 1
+        self:drawText(x + 4, currentY, ranking.desc, ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
+        currentY = currentY + 1
+    end
+
+    -- Close Button
+    local btnWidth = 20
+    local btnHeight = 3
+    local btnX = math.floor((dialogWidth - btnWidth) / 2) + x
+    local btnY = y + dialogHeight - 4
+
+    self:addButton("rankings_close", btnX, btnY, btnWidth, btnHeight, "SCHLIESSEN", nil, ui.COLORS.BTN_CALL)
+
+    -- Warte auf Close
+    while true do
+        local event, p1, p2, p3 = os.pullEvent()
+
+        if event == "monitor_touch" then
+            local touchX, touchY = p2, p3
+            local buttonId = self:handleTouch(touchX, touchY)
+
+            if buttonId == "rankings_close" then
+                break
+            end
+        end
+    end
+
+    self:clearButtons()
 end
 
 -- Zeigt Overlay-Nachricht
@@ -603,36 +693,48 @@ end
 
 -- Input-Dialog für Raise-Betrag
 function ui:showRaiseInput(min, max, pot)
-    local dialogHeight = 14
-    local y = math.floor(self.height / 2) - 6
+    local dialogHeight = 16
+    local y = math.floor(self.height / 2) - 8
     local width = self.width - 8
     local x = 4
 
-    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL)
+    -- Verbesserte Dialog-Box mit Schatten-Effekt
+    self:drawBox(x + 1, y + 1, width, dialogHeight, ui.COLORS.CARD_BORDER)  -- Schatten
+    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL_DARK)
     self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TABLE_BORDER)
 
-    -- Titel
-    self:drawCenteredText(y + 1, "RAISE AMOUNT", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
+    -- Titel mit Hervorhebung
+    local titleY = y + 1
+    local titleWidth = 18
+    local titleX = math.floor((width - titleWidth) / 2) + x
+    self:drawBox(titleX, titleY, titleWidth, 3, ui.COLORS.BTN_RAISE)
+    self:drawBorder(titleX, titleY, titleWidth, 3, ui.COLORS.TABLE_BORDER)
+    self:drawCenteredText(titleY + 1, "=== RAISE ===", ui.COLORS.TEXT_WHITE, ui.COLORS.BTN_RAISE)
 
-    -- Info
-    self:drawText(x + 2, y + 3, "Min: " .. min .. " chips", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL)
-    self:drawText(x + 2, y + 4, "Max: " .. max .. " chips", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL)
-    self:drawText(x + 2, y + 5, "Pot: " .. pot .. " chips", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
+    -- Pot Info
+    local potY = y + 5
+    local potText = "Pot: " .. pot .. " chips"
+    local potWidth = #potText + 4
+    local potX = math.floor((width - potWidth) / 2) + x
+    self:drawBox(potX, potY, potWidth, 3, ui.COLORS.POT_BG)
+    self:drawBorder(potX, potY, potWidth, 3, ui.COLORS.TABLE_BORDER)
+    self:drawText(potX + 2, potY + 1, potText, ui.COLORS.TEXT_YELLOW, ui.COLORS.POT_BG)
 
-    -- Slider
-    local sliderY = y + 7
-    local sliderWidth = width - 4
+    -- Inkrement-Buttons
     local current = min
+    local buttonsY = y + 9
+    local buttonsWidth = width - 4
 
-    self:drawRaiseSlider(min, max, current, x + 2, sliderY, sliderWidth)
+    self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
 
-    -- Buttons
-    local btnY = y + dialogHeight - 2
+    -- Aktions-Buttons (RAISE, ALL-IN, CANCEL)
+    local actionBtnY = y + dialogHeight - 3
     local btnWidth = math.floor((width - 10) / 3)
+    local btnHeight = 2
 
-    self:addButton("raise_confirm", x + 2, sliderY + 6, btnWidth, 2, "RAISE", nil, ui.COLORS.BTN_RAISE)
-    self:addButton("raise_allin", x + 4 + btnWidth, sliderY + 6, btnWidth, 2, "ALL-IN", nil, ui.COLORS.BTN_ALLIN)
-    self:addButton("raise_cancel", x + 6 + btnWidth * 2, sliderY + 6, btnWidth, 2, "CANCEL", nil, ui.COLORS.BTN_FOLD)
+    self:addButton("raise_confirm", x + 2, actionBtnY, btnWidth, btnHeight, "RAISE", nil, ui.COLORS.BTN_RAISE)
+    self:addButton("raise_allin", x + 4 + btnWidth, actionBtnY, btnWidth, btnHeight, "ALL-IN", nil, ui.COLORS.BTN_ALLIN)
+    self:addButton("raise_cancel", x + 6 + btnWidth * 2, actionBtnY, btnWidth, btnHeight, "CANCEL", nil, ui.COLORS.BTN_FOLD)
 
     -- Rückgabe: Warte auf Touch
     local result = {amount = current, action = nil}
@@ -643,18 +745,33 @@ function ui:showRaiseInput(min, max, pot)
         if event == "monitor_touch" then
             local touchX, touchY = p2, p3
 
-            -- Check Slider
-            local newValue = self:handleSliderTouch(touchX, touchY, x + 2, sliderY, sliderWidth, min, max)
-            if newValue then
-                current = newValue
-                result.amount = current
-                self:drawRaiseSlider(min, max, current, x + 2, sliderY, sliderWidth)
-            end
-
             -- Check Buttons
             local buttonId = self:handleTouch(touchX, touchY)
 
-            if buttonId == "raise_confirm" then
+            -- Inkrement-Buttons
+            if buttonId == "raise_dec10" then
+                current = math.max(min, current - 10)
+                result.amount = current
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+            elseif buttonId == "raise_dec1" then
+                current = math.max(min, current - 1)
+                result.amount = current
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+            elseif buttonId == "raise_inc1" then
+                current = math.min(max, current + 1)
+                result.amount = current
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+            elseif buttonId == "raise_inc10" then
+                current = math.min(max, current + 10)
+                result.amount = current
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+            elseif buttonId == "raise_pot" then
+                current = math.min(pot, max)
+                current = math.max(min, current)  -- Sicherstellen dass >= min
+                result.amount = current
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+            -- Aktions-Buttons
+            elseif buttonId == "raise_confirm" then
                 result.action = "raise"
                 break
             elseif buttonId == "raise_allin" then
@@ -664,10 +781,6 @@ function ui:showRaiseInput(min, max, pot)
             elseif buttonId == "raise_cancel" then
                 result.action = "cancel"
                 break
-            elseif buttonId == "raise_pot" then
-                current = math.min(pot, max)
-                result.amount = current
-                self:drawRaiseSlider(min, max, current, x + 2, sliderY, sliderWidth)
             end
         end
     end
