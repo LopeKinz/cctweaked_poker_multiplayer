@@ -117,13 +117,14 @@ end
 function poker.isStraight(cards)
     local sorted = poker.sortCards(cards)
     local values = {}
+    local valueSet = {}
 
     -- Sammle einzigartige Werte
     for _, card in ipairs(sorted) do
         local val = poker.RANK_VALUES[card.rank]
-        if not values[val] then
+        if not valueSet[val] then
             table.insert(values, val)
-            values[val] = true
+            valueSet[val] = true
         end
     end
 
