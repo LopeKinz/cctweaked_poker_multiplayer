@@ -526,7 +526,8 @@ end
 
 -- Spieler-Auswahl Dialog
 function ui:showPlayerSelection(players)
-    local dialogHeight = math.min(#players * 3 + 8, self.height - 4)
+    -- +3 für Titel, +3 für jeden Spieler, +3 für "Manuell", +3 für "Zuschauer"
+    local dialogHeight = math.min(#players * 3 + 14, self.height - 4)
     local y = math.floor((self.height - dialogHeight) / 2)
     local width = math.min(40, self.width - 8)
     local x = math.floor((self.width - width) / 2)
@@ -561,6 +562,10 @@ function ui:showPlayerSelection(players)
     btnY = btnY + 1
     self:addButton("manual_input", x + 4, btnY, btnWidth, btnHeight, "Manuell eingeben", nil, ui.COLORS.PANEL)
 
+    -- "Als Zuschauer beitreten" Button
+    btnY = btnY + btnHeight + 1
+    self:addButton("spectator", x + 4, btnY, btnWidth, btnHeight, "Als Zuschauer beitreten", nil, ui.COLORS.BTN_CHECK)
+
     -- Warte auf Auswahl
     local selectedPlayer = nil
 
@@ -593,6 +598,10 @@ function ui:showPlayerSelection(players)
                         selectedPlayer = input
                         break
                     end
+                elseif buttonId == "spectator" then
+                    -- Zuschauer-Modus
+                    selectedPlayer = "Zuschauer_" .. os.getComputerID()
+                    break
                 else
                     -- Spieler aus Liste gewählt
                     local playerIndex = tonumber(buttonId:match("player_(%d+)"))

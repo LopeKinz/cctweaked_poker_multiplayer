@@ -121,22 +121,18 @@ local function selectPlayer()
     local players = detectPlayer()
 
     if not players or #players == 0 then
-        -- Keine Spieler erkannt - manuelle Eingabe
-        print("Keine Spieler erkannt - manuelle Eingabe")
-        client.ui:showMessage("Keine Spieler in Reichweite!\nManuelle Eingabe...", 2, ui.COLORS.BTN_CHECK)
-
-        -- Zeige manuellen Input
-        return client.ui:showPlayerSelection({})
-    elseif #players == 1 then
-        -- Nur ein Spieler - automatisch auswählen
-        print("Ein Spieler erkannt: " .. players[1])
-        client.ui:showMessage("Spieler erkannt:\n" .. players[1], 2, ui.COLORS.BTN_CALL)
-        return players[1]
+        -- Keine Spieler erkannt - trotzdem Auswahlliste zeigen
+        print("Keine Spieler erkannt")
+        client.ui:showMessage("Keine Spieler in Reichweite!\nManuell eingeben möglich", 2, ui.COLORS.BTN_CHECK)
     else
-        -- Mehrere Spieler - Auswahl anzeigen
-        print("Mehrere Spieler erkannt: " .. #players)
-        return client.ui:showPlayerSelection(players)
+        -- Spieler erkannt - Info anzeigen
+        print("Spieler erkannt: " .. #players)
+        client.ui:showMessage("Spieler erkannt: " .. #players .. "\nWähle deinen Namen", 2, ui.COLORS.BTN_CALL)
     end
+
+    -- IMMER Auswahlliste zeigen (auch bei 0 oder 1 Spieler)
+    -- Nutzer kann auch bewusst "Zuschauer werden" oder manuell eingeben
+    return client.ui:showPlayerSelection(players or {})
 end
 
 -- Verbindet zu Server
