@@ -80,10 +80,12 @@ function ui.new(monitor)
     end
     instance.width, instance.height = monitor.getSize()
 
+    -- Setze metatable BEVOR wir Methoden aufrufen
+    setmetatable(instance, {__index = ui})
+
     -- Spieler-Positionen berechnen (4 Spieler um den Tisch)
     instance.playerPositions = instance:calculatePlayerPositions()
 
-    setmetatable(instance, {__index = ui})
     return instance
 end
 
