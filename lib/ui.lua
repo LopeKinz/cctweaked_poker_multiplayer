@@ -354,10 +354,10 @@ function ui:addButton(id, x, y, width, height, text, callback, color, enabled)
         height = height,
         text = text,
         callback = callback,
-        color = color or ui.COLORS.BUTTON,
+        color = color or ui.COLORS.PANEL,
         enabled = enabled == nil and true or enabled
     }
-    self:drawButton(x, y, width, height, text, color, ui.COLORS.BTN_TEXT, enabled)
+    self:drawButton(x, y, width, height, text, color or ui.COLORS.PANEL, ui.COLORS.BTN_TEXT, enabled)
 end
 
 -- Prüft Touch auf Button
@@ -402,7 +402,12 @@ function ui:drawRaiseSlider(min, max, current, x, y, width)
     self:drawBox(x, y, width, 2, ui.COLORS.PANEL)
 
     -- Slider-Füllung
-    local percent = (current - min) / (max - min)
+    local percent = 0
+    if max > min then
+        percent = (current - min) / (max - min)
+    else
+        percent = 1  -- Wenn nur ein Betrag möglich, volle Füllung
+    end
     local fillWidth = math.floor(width * percent)
     if fillWidth > 0 then
         self:drawBox(x, y, fillWidth, 2, ui.COLORS.BTN_RAISE)
@@ -423,6 +428,11 @@ end
 -- Slider-Touch-Handler
 function ui:handleSliderTouch(x, y, sliderX, sliderY, sliderWidth, min, max)
     if y >= sliderY and y < sliderY + 2 then
+        -- Guard gegen Division durch Null
+        if max <= min then
+            return min
+        end
+
         local percent = (x - sliderX) / sliderWidth
         percent = math.max(0, math.min(1, percent))
         local value = math.floor(min + (max - min) * percent)
@@ -510,12 +520,13 @@ end
 
 -- Input-Dialog für Raise-Betrag
 function ui:showRaiseInput(min, max, pot)
+    local dialogHeight = 14
     local y = math.floor(self.height / 2) - 6
     local width = self.width - 8
     local x = 4
 
-    self:drawBox(x, y, width, 14, ui.COLORS.PANEL)
-    self:drawBorder(x, y, width, 14, ui.COLORS.TABLE_BORDER)
+    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL)
+    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TABLE_BORDER)
 
     -- Titel
     self:drawCenteredText(y + 1, "RAISE AMOUNT", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
@@ -533,7 +544,7 @@ function ui:showRaiseInput(min, max, pot)
     self:drawRaiseSlider(min, max, current, x + 2, sliderY, sliderWidth)
 
     -- Buttons
-    local btnY = y + height - 2
+    local btnY = y + dialogHeight - 2
     local btnWidth = math.floor((width - 10) / 3)
 
     self:addButton("raise_confirm", x + 2, sliderY + 6, btnWidth, 2, "RAISE", nil, ui.COLORS.BTN_RAISE)
