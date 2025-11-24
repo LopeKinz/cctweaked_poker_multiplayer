@@ -13,35 +13,40 @@ local CMD = {
     STATUS_RESPONSE = "STATUS_RESPONSE"
 }
 
--- Ermittelt Computer-Typ basierend auf Hardware
+-- Ermittelt Computer-Typ basierend auf Hardware und Konfiguration
 local function getComputerType()
-    -- Prüfe auf Monitor (Client hat Monitor, Server nicht)
-    local monitor = peripheral.find("monitor")
-    if monitor then
-        return "client"
-    end
-
-    -- Prüfe welches Programm läuft
-    for _, program in ipairs({"server.lua", "server"}) do
-        if shell.getRunningProgram():find(program) then
-            return "server"
+    -- 1. Prüfe ob spezielle Typ-Datei existiert
+    if fs.exists(".type") then
+        local file = fs.open(".type", "r")
+        local computerType = file.readLine()
+        file.close()
+        if computerType then
+            return computerType
         end
     end
 
-    for _, program in ipairs({"client.lua", "client"}) do
-        if shell.getRunningProgram():find(program) then
-            return "client"
+    -- 2. Prüfe auf Monitor (Client hat Monitor, Server nicht)
+    local hasMonitor = false
+    for _, side in ipairs({"top", "bottom", "left", "right", "front", "back"}) do
+        if peripheral.getType(side) == "monitor" then
+            hasMonitor = true
+            break
         end
     end
 
-    -- Fallback: Prüfe Dateien (nur wenn nichts anderes gefunden)
-    if fs.exists("server.lua") and not fs.exists("client.lua") then
-        return "server"
-    elseif fs.exists("client.lua") then
+    if hasMonitor then
+        -- Speichere Typ für nächstes Mal
+        local file = fs.open(".type", "w")
+        file.write("client")
+        file.close()
         return "client"
-    else
-        return "unknown"
     end
+
+    -- 3. Keine Monitor gefunden -> Server
+    local file = fs.open(".type", "w")
+    file.write("server")
+    file.close()
+    return "server"
 end
 
 -- Initialisiert Netzwerk
