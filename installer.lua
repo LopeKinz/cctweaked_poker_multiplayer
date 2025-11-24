@@ -12,6 +12,8 @@ local FILES = {
     "server.lua",
     "client.lua",
     "update.lua",
+    "daemon.lua",
+    "startup.lua",
 
     -- Konfiguration
     "config.example.lua",
@@ -160,7 +162,9 @@ local function installServer()
         "lib/poker.lua",
         "lib/network.lua",
         "server.lua",
-        "update.lua"
+        "update.lua",
+        "daemon.lua",
+        "startup.lua"
     }
 
     return installFiles(serverFiles)
@@ -175,6 +179,8 @@ local function installClient()
         "lib/bank.lua",
         "client.lua",
         "update.lua",
+        "daemon.lua",
+        "startup.lua",
         "config.example.lua"
     }
 
