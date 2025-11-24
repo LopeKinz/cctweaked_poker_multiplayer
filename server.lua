@@ -304,10 +304,10 @@ nextPlayer = function()
 
     repeat
         game.currentPlayerIndex = (game.currentPlayerIndex % #game.activePlayers) + 1
-        local nextPlayer = game.activePlayers[game.currentPlayerIndex]
+        local currentPlayer = game.activePlayers[game.currentPlayerIndex]
 
         -- Prüfe ob dieser Spieler noch aktiv ist
-        if not nextPlayer.folded and not nextPlayer.allIn then
+        if not currentPlayer.folded and not currentPlayer.allIn then
             -- Prüfe ob Wettrunde beendet ist
             if game.currentPlayerIndex == startIndex or isBettingRoundComplete() then
                 endBettingRound()
