@@ -13,9 +13,29 @@ local CMD = {
     STATUS_RESPONSE = "STATUS_RESPONSE"
 }
 
--- Ermittelt Computer-Typ
+-- Ermittelt Computer-Typ basierend auf Hardware
 local function getComputerType()
-    if fs.exists("server.lua") then
+    -- Prüfe auf Monitor (Client hat Monitor, Server nicht)
+    local monitor = peripheral.find("monitor")
+    if monitor then
+        return "client"
+    end
+
+    -- Prüfe welches Programm läuft
+    for _, program in ipairs({"server.lua", "server"}) do
+        if shell.getRunningProgram():find(program) then
+            return "server"
+        end
+    end
+
+    for _, program in ipairs({"client.lua", "client"}) do
+        if shell.getRunningProgram():find(program) then
+            return "client"
+        end
+    end
+
+    -- Fallback: Prüfe Dateien (nur wenn nichts anderes gefunden)
+    if fs.exists("server.lua") and not fs.exists("client.lua") then
         return "server"
     elseif fs.exists("client.lua") then
         return "client"
