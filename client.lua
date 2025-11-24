@@ -100,19 +100,41 @@ end
 -- Erkennt Spieler
 local function detectPlayer()
     if not client.playerDetector then
-        return "Player"
+        return nil
     end
 
+    -- Erhöhter Radius für bessere Erkennung
     local players = client.playerDetector.getPlayersInRange and
-                    client.playerDetector.getPlayersInRange(3) or
+                    client.playerDetector.getPlayersInRange(10) or
                     client.playerDetector.getPlayers and
                     client.playerDetector.getPlayers()
 
-    if players and #players > 0 then
-        return players[1]
-    end
+    return players
+end
 
-    return nil
+-- Spieler auswählen
+local function selectPlayer()
+    print("Erkenne Spieler in der Nähe...")
+
+    local players = detectPlayer()
+
+    if not players or #players == 0 then
+        -- Keine Spieler erkannt - manuelle Eingabe
+        print("Keine Spieler erkannt - manuelle Eingabe")
+        client.ui:showMessage("Keine Spieler in Reichweite!\nManuelle Eingabe...", 2, ui.COLORS.BTN_CHECK)
+
+        -- Zeige manuellen Input
+        return client.ui:showPlayerSelection({})
+    elseif #players == 1 then
+        -- Nur ein Spieler - automatisch auswählen
+        print("Ein Spieler erkannt: " .. players[1])
+        client.ui:showMessage("Spieler erkannt:\n" .. players[1], 2, ui.COLORS.BTN_CALL)
+        return players[1]
+    else
+        -- Mehrere Spieler - Auswahl anzeigen
+        print("Mehrere Spieler erkannt: " .. #players)
+        return client.ui:showPlayerSelection(players)
+    end
 end
 
 -- Verbindet zu Server
@@ -127,17 +149,14 @@ local function connectToServer()
 
     print("Server gefunden! ID: " .. client.serverId)
 
-    -- Erkenne Spieler
-    client.ui:showMessage("Warte auf Spieler...", nil, ui.COLORS.BTN_CALL)
+    -- Spieler auswählen (mit Touch-Liste)
+    client.playerName = selectPlayer()
 
-    while not client.playerName do
-        client.playerName = detectPlayer()
-        if not client.playerName then
-            sleep(1)
-        end
+    if not client.playerName then
+        error("Kein Spielername ausgewählt!")
     end
 
-    print("Spieler erkannt: " .. client.playerName)
+    print("Spieler ausgewählt: " .. client.playerName)
 
     -- Verbinde
     client.ui:showMessage("Verbinde...", nil, ui.COLORS.BTN_CALL)

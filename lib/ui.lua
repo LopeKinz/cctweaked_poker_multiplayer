@@ -520,6 +520,91 @@ function ui:showMessage(message, duration, color, large)
     end
 end
 
+-- Spieler-Auswahl Dialog
+function ui:showPlayerSelection(players)
+    local dialogHeight = math.min(#players * 3 + 8, self.height - 4)
+    local y = math.floor((self.height - dialogHeight) / 2)
+    local width = math.min(40, self.width - 8)
+    local x = math.floor((self.width - width) / 2)
+
+    self:clear(ui.COLORS.TABLE_FELT)
+    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL)
+    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TABLE_BORDER)
+
+    -- Titel
+    self:drawCenteredText(y + 1, "SPIELER AUSWAHL", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
+    self:drawCenteredText(y + 2, "Wähle deinen Namen:", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL)
+
+    -- Spieler-Buttons
+    local btnY = y + 4
+    local btnHeight = 2
+    local btnWidth = width - 8
+
+    -- Cleariere Buttons
+    self:clearButtons()
+
+    -- Erstelle Button für jeden Spieler
+    for i, playerName in ipairs(players) do
+        local btnId = "player_" .. i
+        self:addButton(btnId, x + 4, btnY, btnWidth, btnHeight, playerName, nil, ui.COLORS.BTN_CALL)
+        btnY = btnY + btnHeight + 1
+
+        -- Maximale Anzahl Buttons (falls zu viele Spieler)
+        if i >= 10 then break end
+    end
+
+    -- "Manuell eingeben" Button
+    btnY = btnY + 1
+    self:addButton("manual_input", x + 4, btnY, btnWidth, btnHeight, "Manuell eingeben", nil, ui.COLORS.PANEL)
+
+    -- Warte auf Auswahl
+    local selectedPlayer = nil
+
+    while true do
+        local event, p1, p2, p3 = os.pullEvent()
+
+        if event == "monitor_touch" then
+            local touchX, touchY = p2, p3
+            local buttonId = self:handleTouch(touchX, touchY)
+
+            if buttonId then
+                if buttonId == "manual_input" then
+                    -- Manuelle Eingabe
+                    self:clear(ui.COLORS.TABLE_FELT)
+                    self:drawBox(x, y, width, 10, ui.COLORS.PANEL)
+                    self:drawBorder(x, y, width, 10, ui.COLORS.TABLE_BORDER)
+                    self:drawCenteredText(y + 1, "Spieler-Name eingeben:", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
+
+                    -- Input-Feld
+                    self:drawBox(x + 4, y + 4, width - 8, 1, colors.black)
+                    self.monitor.setCursorPos(x + 4, y + 4)
+                    self.monitor.setTextColor(colors.white)
+                    self.monitor.setBackgroundColor(colors.black)
+                    self.monitor.setCursorBlink(true)
+
+                    local input = read()
+                    self.monitor.setCursorBlink(false)
+
+                    if input and #input > 0 then
+                        selectedPlayer = input
+                        break
+                    end
+                else
+                    -- Spieler aus Liste gewählt
+                    local playerIndex = tonumber(buttonId:match("player_(%d+)"))
+                    if playerIndex and players[playerIndex] then
+                        selectedPlayer = players[playerIndex]
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    self:clearButtons()
+    return selectedPlayer
+end
+
 -- Input-Dialog für Raise-Betrag
 function ui:showRaiseInput(min, max, pot)
     local dialogHeight = 14
