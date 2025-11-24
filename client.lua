@@ -1,4 +1,4 @@
--- client.lua - Poker Client mit Touchscreen UI
+-- client.lua - Professional Poker Client mit Touch-UI
 local poker = require("lib.poker")
 local network = require("lib.network")
 local ui = require("lib.ui")
@@ -33,7 +33,8 @@ local client = {
     playerDetector = nil,
     rsbridge = nil,
     connected = false,
-    ready = false
+    ready = false,
+    myPosition = nil,  -- Position am Tisch (1-4)
 }
 
 -- Findet Peripherie
@@ -117,7 +118,7 @@ end
 -- Verbindet zu Server
 local function connectToServer()
     client.ui:clear()
-    client.ui:showMessage("Suche Server...\nWarte bis Server online ist...", nil, ui.COLORS.BLUE)
+    client.ui:showMessage("Suche Server...\nWarte bis Server online ist...", nil, ui.COLORS.PANEL)
 
     print("Suche Server (endlos bis gefunden)...")
 
@@ -127,7 +128,7 @@ local function connectToServer()
     print("Server gefunden! ID: " .. client.serverId)
 
     -- Erkenne Spieler
-    client.ui:showMessage("Warte auf Spieler...", nil, ui.COLORS.YELLOW)
+    client.ui:showMessage("Warte auf Spieler...", nil, ui.COLORS.BTN_CALL)
 
     while not client.playerName do
         client.playerName = detectPlayer()
@@ -139,7 +140,7 @@ local function connectToServer()
     print("Spieler erkannt: " .. client.playerName)
 
     -- Verbinde
-    client.ui:showMessage("Verbinde...", nil, ui.COLORS.BLUE)
+    client.ui:showMessage("Verbinde...", nil, ui.COLORS.BTN_CALL)
 
     -- Versuche endlos mit Server zu verbinden
     local connected = false
@@ -156,168 +157,258 @@ local function connectToServer()
             client.connected = true
             connected = true
             print("Verbunden! ID: " .. client.playerId)
-            client.ui:showMessage("Verbunden!", 2, ui.COLORS.GREEN)
+            client.ui:showMessage("Verbunden!", 2, ui.COLORS.BTN_CALL)
         else
             print("Keine Antwort, versuche erneut...")
-            client.ui:showMessage("Verbinde...\nVersuche erneut...", nil, ui.COLORS.YELLOW)
+            client.ui:showMessage("Verbinde...\nVersuche erneut...", nil, ui.COLORS.BTN_CHECK)
             sleep(2)
+        end
+    end
+end
+
+-- Findet eigene Position in Spieler-Liste
+local function getMyPlayerIndex()
+    if not client.gameState or not client.gameState.players then return nil end
+
+    for i, player in ipairs(client.gameState.players) do
+        if player.id == client.playerId then
+            return i
+        end
+    end
+    return nil
+end
+
+-- Berechnet Spieler-Position am Tisch (relativ zu eigenem Platz)
+local function getPlayerTablePosition(playerIndex)
+    local myIndex = getMyPlayerIndex()
+    if not myIndex then return nil end
+
+    -- Eigene Position ist immer unten (Position 4)
+    -- Andere Spieler werden relativ platziert
+    local totalPlayers = #client.gameState.players
+
+    if playerIndex == myIndex then
+        return 4  -- Unten (eigene Position)
+    end
+
+    local offset = (playerIndex - myIndex + totalPlayers) % totalPlayers
+
+    if totalPlayers == 2 then
+        return 2  -- Oben
+    elseif totalPlayers == 3 then
+        if offset == 1 then return 1 end  -- Links
+        if offset == 2 then return 2 end  -- Oben
+    else  -- 4 Spieler
+        if offset == 1 then return 1 end  -- Links
+        if offset == 2 then return 2 end  -- Oben
+        if offset == 3 then return 3 end  -- Rechts
+    end
+
+    return nil
+end
+
+-- Zeichnet kompletten Poker-Tisch
+local function drawPokerTable()
+    if not client.gameState then return end
+
+    -- Tisch-Hintergrund
+    client.ui:drawPokerTable()
+
+    local state = client.gameState
+
+    -- Community Cards
+    client.ui:drawCommunityCards(state.communityCards, state.round)
+
+    -- Pot
+    if state.pot and state.pot > 0 then
+        client.ui:drawPot(state.pot)
+    end
+
+    -- Zeichne alle Spieler
+    for i, player in ipairs(state.players) do
+        local tablePos = getPlayerTablePosition(i)
+        if tablePos then
+            local isMe = player.id == client.playerId
+            local isActive = i == state.currentPlayerIndex
+            local isDealer = i == state.dealerIndex
+            local isSmallBlind = i == ((state.dealerIndex % #state.players) + 1)
+            local isBigBlind = i == (((state.dealerIndex + 1) % #state.players) + 1)
+
+            client.ui:drawPlayerBox(
+                tablePos,
+                player,
+                isDealer,
+                isSmallBlind,
+                isBigBlind,
+                isActive,
+                isMe
+            )
+        end
+    end
+
+    -- Eigene Karten (groß unten)
+    if client.myCards and #client.myCards == 2 then
+        client.ui:drawOwnCards(client.myCards)
+
+        -- Hand-Evaluation (wenn genug Community Cards)
+        if state.communityCards and #state.communityCards >= 3 then
+            local allCards = {}
+            for _, card in ipairs(client.myCards) do
+                table.insert(allCards, card)
+            end
+            for _, card in ipairs(state.communityCards) do
+                table.insert(allCards, card)
+            end
+
+            local hand = poker.evaluateHand(allCards)
+            client.ui:drawHandEvaluation(hand.name)
         end
     end
 end
 
 -- Zeichnet Lobby-Screen
 local function drawLobby()
-    client.ui:clear()
+    client.ui:drawPokerTable()
 
     -- Titel
-    client.ui:drawCenteredText(2, "=== POKER ===", ui.COLORS.YELLOW, ui.COLORS.BG)
+    local y = math.floor(client.ui.height / 2) - 8
+    client.ui:drawCenteredText(y, "=== POKER LOBBY ===", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
 
     -- Spieler-Info
-    client.ui:drawText(2, 4, "Spieler: " .. client.playerName, ui.COLORS.WHITE, ui.COLORS.BG)
+    y = y + 2
+    client.ui:drawCenteredText(y, "Spieler: " .. client.playerName, ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
 
     -- Chips
+    y = y + 1
     local chips = countChips()
-    client.ui:drawText(2, 5, "Chips: " .. chips, ui.COLORS.GREEN, ui.COLORS.BG)
+    client.ui:drawCenteredText(y, "Chips: " .. chips, ui.COLORS.CHIPS_GREEN, ui.COLORS.TABLE_FELT)
 
     -- Status
     if client.gameState then
         local playerCount = #client.gameState.players
-        client.ui:drawText(2, 7, "Spieler: " .. playerCount .. "/4", ui.COLORS.WHITE, ui.COLORS.BG)
+        y = y + 2
+        client.ui:drawCenteredText(y, "Spieler: " .. playerCount .. "/4", ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
 
         -- Spieler-Liste
-        local y = 9
+        y = y + 2
         for _, player in ipairs(client.gameState.players) do
             local status = player.ready and "[BEREIT]" or "[WARTEN]"
-            local color = player.ready and ui.COLORS.GREEN or ui.COLORS.RED
-            client.ui:drawText(2, y, player.name .. " " .. status, color, ui.COLORS.BG)
+            local color = player.ready and ui.COLORS.TEXT_GREEN or ui.COLORS.TEXT_RED
+            client.ui:drawCenteredText(y, player.name .. " " .. status, color, ui.COLORS.TABLE_FELT)
             y = y + 1
         end
     end
 
     -- Ready Button
     if not client.ready then
-        client.ui:addButton("ready", 2, client.ui.height - 3, 20, 3, "BEREIT", function()
+        local btnWidth = 25
+        local btnHeight = 3
+        local btnX = math.floor((client.ui.width - btnWidth) / 2)
+        local btnY = client.ui.height - 6
+
+        client.ui:addButton("ready", btnX, btnY, btnWidth, btnHeight, "BEREIT", function()
             client.ready = true
             network.send(client.serverId, network.MSG.READY, {ready = true})
             client.ui:setButtonEnabled("ready", false)
-            client.ui:showMessage("Warte auf andere...", 2, ui.COLORS.YELLOW)
-        end, ui.COLORS.GREEN)
+            client.ui:showMessage("Warte auf andere...", 2, ui.COLORS.BTN_CHECK)
+            drawLobby()
+        end, ui.COLORS.BTN_CALL)
     else
-        client.ui:drawText(2, client.ui.height - 2, "[WARTE AUF ANDERE...]", ui.COLORS.YELLOW, ui.COLORS.BG)
-    end
-end
-
--- Zeichnet Spiel-Screen
-local function drawGame()
-    if not client.gameState then return end
-
-    client.ui:clear()
-
-    local state = client.gameState
-
-    -- Community Cards
-    client.ui:drawCenteredText(2, "=== " .. string.upper(state.round) .. " ===", ui.COLORS.YELLOW, ui.COLORS.BG)
-    client.ui:drawCommunityCards(4, state.communityCards)
-
-    -- Pot
-    client.ui:drawPot(9, state.pot)
-
-    -- Eigene Karten
-    local cardY = client.ui.height - 6
-    client.ui:drawText(2, cardY - 1, "Deine Hand:", ui.COLORS.WHITE, ui.COLORS.BG)
-    client.ui:drawHand(2, cardY, client.myCards, true)
-
-    -- Eigene Hand-Bewertung
-    if client.myCards and #client.myCards == 2 and state.communityCards and #state.communityCards >= 3 then
-        local allCards = {}
-        for _, card in ipairs(client.myCards) do
-            table.insert(allCards, card)
-        end
-        for _, card in ipairs(state.communityCards) do
-            table.insert(allCards, card)
-        end
-
-        local hand = poker.evaluateHand(allCards)
-        client.ui:drawText(14, cardY, hand.name, ui.COLORS.YELLOW, ui.COLORS.BG)
-    end
-
-    -- Spieler-Infos (kompakt)
-    local infoY = 11
-    for i, player in ipairs(state.players) do
-        local isMe = player.id == client.playerId
-        local isActive = i == state.currentPlayerIndex
-        local prefix = isMe and "> " or "  "
-
-        if isActive then prefix = "* " end
-
-        local statusText = player.name .. ": " .. player.chips .. " chips"
-        if player.bet > 0 then
-            statusText = statusText .. " (Bet: " .. player.bet .. ")"
-        end
-        if player.folded then
-            statusText = statusText .. " [FOLD]"
-        end
-        if player.allIn then
-            statusText = statusText .. " [ALL-IN]"
-        end
-
-        local color = isMe and ui.COLORS.GREEN or ui.COLORS.WHITE
-        if player.folded then color = ui.COLORS.RED end
-
-        client.ui:drawText(2, infoY, prefix .. statusText, color, ui.COLORS.BG)
-        infoY = infoY + 1
+        local y = client.ui.height - 4
+        client.ui:drawCenteredText(y, "[WARTE AUF ANDERE...]", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
     end
 end
 
 -- Zeichnet Aktions-Buttons
 local function drawActionButtons(canCheck, currentBet, myBet, myChips)
-    local buttonY = client.ui.height - 9
-    local buttonWidth = math.floor((client.ui.width - 10) / 4)
-
     -- Entferne alte Buttons
-    client.ui.buttons = {}
+    client.ui:clearButtons()
+
+    local btnY = client.ui.height - 2
+    local btnWidth = math.floor((client.ui.width - 15) / 5)
+    local btnHeight = 2
+
+    local spacing = 2
+    local totalWidth = btnWidth * 5 + spacing * 4
+    local startX = math.floor((client.ui.width - totalWidth) / 2)
 
     -- Fold
-    client.ui:addButton("fold", 2, buttonY, buttonWidth, 3, "FOLD", function()
+    client.ui:addButton("fold", startX, btnY, btnWidth, btnHeight, "FOLD", function()
         network.send(client.serverId, network.MSG.ACTION, {action = "fold"})
-        client.ui.buttons = {}
-    end, ui.COLORS.RED)
+        client.ui:clearButtons()
+        drawPokerTable()
+    end, ui.COLORS.BTN_FOLD)
 
     -- Check/Call
     if canCheck then
-        client.ui:addButton("check", 4 + buttonWidth, buttonY, buttonWidth, 3, "CHECK", function()
+        client.ui:addButton("check", startX + btnWidth + spacing, btnY, btnWidth, btnHeight, "CHECK", function()
             network.send(client.serverId, network.MSG.ACTION, {action = "check"})
-            client.ui.buttons = {}
-        end, ui.COLORS.YELLOW)
+            client.ui:clearButtons()
+            drawPokerTable()
+        end, ui.COLORS.BTN_CHECK)
     else
         local callAmount = currentBet - myBet
         if callAmount <= myChips then
-            client.ui:addButton("call", 4 + buttonWidth, buttonY, buttonWidth, 3, "CALL " .. callAmount, function()
+            local text = "CALL"
+            if callAmount > 0 then
+                text = "CALL " .. callAmount
+                if #text > btnWidth then text = "CALL" end
+            end
+
+            client.ui:addButton("call", startX + btnWidth + spacing, btnY, btnWidth, btnHeight, text, function()
                 network.send(client.serverId, network.MSG.ACTION, {action = "call"})
-                client.ui.buttons = {}
-            end, ui.COLORS.YELLOW)
+                client.ui:clearButtons()
+                drawPokerTable()
+            end, ui.COLORS.BTN_CALL)
         end
     end
 
     -- Raise
     if myChips > (currentBet - myBet) then
-        client.ui:addButton("raise", 6 + buttonWidth * 2, buttonY, buttonWidth, 3, "RAISE", function()
+        client.ui:addButton("raise", startX + (btnWidth + spacing) * 2, btnY, btnWidth, btnHeight, "RAISE", function()
             -- Zeige Raise-Dialog
-            local raiseAmount = tonumber(client.ui:showInput("Raise Betrag:", "20"))
-            if raiseAmount and raiseAmount > 0 then
-                network.send(client.serverId, network.MSG.ACTION, {action = "raise", amount = raiseAmount})
+            local minRaise = (currentBet - myBet) + 20
+            local maxRaise = myChips
+            local pot = client.gameState.pot or 0
+
+            drawPokerTable()  -- Redraw vor Dialog
+            local result = client.ui:showRaiseInput(minRaise, maxRaise, pot)
+
+            if result.action == "raise" then
+                network.send(client.serverId, network.MSG.ACTION, {action = "raise", amount = result.amount})
+            elseif result.action == "all-in" then
+                network.send(client.serverId, network.MSG.ACTION, {action = "all-in"})
             end
-            client.ui.buttons = {}
-        end, ui.COLORS.GREEN)
+
+            client.ui:clearButtons()
+            drawPokerTable()
+        end, ui.COLORS.BTN_RAISE)
+    else
+        -- Disabled Raise
+        client.ui:addButton("raise_disabled", startX + (btnWidth + spacing) * 2, btnY, btnWidth, btnHeight, "RAISE", nil, ui.COLORS.BTN_DISABLED, false)
     end
 
     -- All-In
     if myChips > 0 then
-        client.ui:addButton("allin", 8 + buttonWidth * 3, buttonY, buttonWidth, 3, "ALL-IN", function()
+        client.ui:addButton("allin", startX + (btnWidth + spacing) * 3, btnY, btnWidth, btnHeight, "ALL-IN", function()
             network.send(client.serverId, network.MSG.ACTION, {action = "all-in"})
-            client.ui.buttons = {}
-        end, ui.COLORS.RED)
+            client.ui:clearButtons()
+            drawPokerTable()
+        end, ui.COLORS.BTN_ALLIN)
+    else
+        client.ui:addButton("allin_disabled", startX + (btnWidth + spacing) * 3, btnY, btnWidth, btnHeight, "ALL-IN", nil, ui.COLORS.BTN_DISABLED, false)
     end
+
+    -- Info Button
+    client.ui:addButton("info", startX + (btnWidth + spacing) * 4, btnY, btnWidth, btnHeight, "INFO", function()
+        local info = "Pot: " .. (client.gameState.pot or 0) .. "\n"
+        info = info .. "Current Bet: " .. currentBet .. "\n"
+        info = info .. "Your Bet: " .. myBet .. "\n"
+        info = info .. "Your Chips: " .. myChips
+        client.ui:showMessage(info, 3, ui.COLORS.PANEL)
+        drawPokerTable()
+        drawActionButtons(canCheck, currentBet, myBet, myChips)
+    end, ui.COLORS.PANEL)
 end
 
 -- Behandelt Spielstatus-Update
@@ -331,13 +422,13 @@ local function handleGameState(state)
     if state.round == "waiting" then
         drawLobby()
     else
-        drawGame()
+        drawPokerTable()
     end
 end
 
 -- Behandelt "Your Turn"
 local function handleYourTurn(data)
-    client.ui:showMessage("DU BIST DRAN!", 1, ui.COLORS.YELLOW)
+    client.ui:showMessage("DU BIST DRAN!", 1, ui.COLORS.ACTIVE)
 
     -- Finde eigene Spieler-Daten
     local myPlayer = nil
@@ -349,19 +440,25 @@ local function handleYourTurn(data)
     end
 
     if myPlayer then
-        drawGame()
+        drawPokerTable()
         drawActionButtons(
             data.canCheck,
             data.currentBet,
             myPlayer.bet,
             myPlayer.chips
         )
+
+        -- Starte Timer
+        client.ui:startTimer(config.turnTimeout or 60)
     end
 end
 
 -- Behandelt Runden-Ende
 local function handleRoundEnd(data)
-    drawGame()
+    -- Stoppt Timer
+    client.ui:stopTimer()
+
+    drawPokerTable()
 
     -- Zeige Gewinner
     local winnerNames = {}
@@ -373,15 +470,17 @@ local function handleRoundEnd(data)
         end
     end
 
-    local message = "Gewinner: " .. table.concat(winnerNames, ", ")
+    local message = "=== GEWINNER ===\n"
+    message = message .. table.concat(winnerNames, ", ") .. "\n"
     if data.winningHand then
-        message = message .. "\n" .. data.winningHand
+        message = message .. data.winningHand .. "\n"
     end
-    message = message .. "\nPot: " .. data.pot
+    message = message .. "Pot: " .. data.pot .. " chips"
 
-    client.ui:showMessage(message, 5, ui.COLORS.GREEN)
+    client.ui:showMessage(message, 5, ui.COLORS.BTN_CALL, true)
 
     client.ready = false
+    client.ui:clearButtons()
 end
 
 -- Event-Handler
@@ -410,16 +509,30 @@ local function handleEvents()
                     handleRoundEnd(data)
 
                 elseif msgType == network.MSG.GAME_START then
-                    client.ui:showMessage("Spiel startet!", 2, ui.COLORS.GREEN)
+                    client.ui:showMessage("Spiel startet!", 2, ui.COLORS.BTN_CALL)
+                    drawPokerTable()
 
                 elseif msgType == network.MSG.PLAYER_JOINED then
                     print("Spieler beigetreten: " .. data.playerName)
+                    if client.gameState and client.gameState.round == "waiting" then
+                        drawLobby()
+                    end
 
                 elseif msgType == network.MSG.PLAYER_LEFT then
                     print("Spieler verlassen: " .. data.playerName)
+                    if client.gameState and client.gameState.round == "waiting" then
+                        drawLobby()
+                    end
 
                 elseif msgType == network.MSG.ERROR then
-                    client.ui:showMessage("FEHLER: " .. data.message, 3, ui.COLORS.RED)
+                    client.ui:showMessage("FEHLER: " .. data.message, 3, ui.COLORS.BTN_FOLD)
+                    if client.gameState then
+                        if client.gameState.round == "waiting" then
+                            drawLobby()
+                        else
+                            drawPokerTable()
+                        end
+                    end
                 end
             end
         end
@@ -436,9 +549,19 @@ local function heartbeat()
     end
 end
 
+-- Timer Update Loop
+local function timerLoop()
+    while true do
+        if client.ui and client.ui.timerActive then
+            client.ui:updateTimer()
+        end
+        sleep(0.5)
+    end
+end
+
 -- Hauptprogramm
 local function main()
-    print("=== Poker Client ===")
+    print("=== Professional Poker Client ===")
 
     -- Initialisiere
     findPeripherals()
@@ -452,10 +575,11 @@ local function main()
     -- Zeige Lobby
     drawLobby()
 
-    -- Starte Heartbeat parallel
+    -- Starte parallel: Events, Heartbeat, Timer
     parallel.waitForAny(
         handleEvents,
-        heartbeat
+        heartbeat,
+        timerLoop
     )
 end
 
@@ -463,8 +587,8 @@ end
 local success, err = pcall(main)
 if not success then
     if client.ui then
-        client.ui:clear()
-        client.ui:showMessage("FEHLER: " .. tostring(err), 5, ui.COLORS.RED)
+        client.ui:clear(ui.COLORS.BG)
+        client.ui:showMessage("FEHLER:\n" .. tostring(err), 5, ui.COLORS.BTN_FOLD)
     end
     print("FEHLER: " .. tostring(err))
     network.close()
