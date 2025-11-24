@@ -25,6 +25,11 @@ Ein vollständiges 4-Spieler Texas Hold'em Poker-Spiel für CC:Tweaked und Advan
 - 1x RS Bridge (Advanced Peripherals) - optional für Banksystem
 - 1x Wired Modem (für Netzwerk)
 
+### Control-Computer (Optional)
+- 1x Advanced Computer
+- 1x Wired Modem (für Netzwerk)
+- Für zentrale Steuerung aller Computer
+
 ## Installation
 
 ### Automatische Installation (Empfohlen)
@@ -101,6 +106,34 @@ client
 4. Chips in Truhe legen
 5. "Ready" auf Touchscreen drücken
 6. Spiel beginnt automatisch wenn 2-4 Spieler bereit
+
+## Netzwerk-Steuerung (Optional)
+
+Zentrale Verwaltung aller Computer von einem Control-Computer aus.
+
+### Setup Control-Computer:
+
+```lua
+> wget https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/control.lua
+> wget https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/startup-control.lua startup.lua
+> reboot
+```
+
+### Setup auf allen Poker-Computern:
+
+```lua
+> wget https://raw.githubusercontent.com/LopeKinz/cctweaked_poker_multiplayer/main/daemon.lua
+> bg daemon.lua
+```
+
+### Verwendung:
+
+Der Control-Computer startet automatisch. Du kannst:
+- **Scan** - Alle Computer im Netzwerk finden
+- **Start** - Alle Poker-Programme starten
+- **Stop** - Alle Programme stoppen
+- **Reboot** - Alle Computer neu starten
+- **Custom** - Einzelne Computer steuern
 
 ## Updates
 
