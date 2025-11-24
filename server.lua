@@ -68,10 +68,15 @@ local function addPlayer(clientId, playerName)
 
     table.insert(game.players, player)
 
-    -- Erster Spieler wird Spielleiter
-    if not gameMaster then
+    -- Erster NICHT-Zuschauer wird Spielleiter
+    -- Zuschauer (Name beginnt mit "Zuschauer_") können kein Spielleiter sein
+    local isSpectator = playerName:match("^Zuschauer_") ~= nil
+
+    if not gameMaster and not isSpectator then
         gameMaster = clientId
         print("Spieler " .. playerName .. " ist jetzt SPIELLEITER (" .. clientId .. ")")
+    elseif isSpectator then
+        print("Zuschauer " .. playerName .. " beigetreten (" .. clientId .. ")")
     else
         print("Spieler " .. playerName .. " beigetreten (" .. clientId .. ")")
     end
