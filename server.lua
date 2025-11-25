@@ -38,6 +38,7 @@ local startBettingRound
 local handlePlayerAction
 local endBettingRound
 local endHand
+local isBettingRoundComplete
 
 -- Fügt Spieler hinzu
 local function addPlayer(clientId, playerName)
@@ -152,6 +153,36 @@ local function removePlayer(clientId)
     table.remove(game.players, playerIndex)
     print("Spieler " .. playerData.name .. " hat verlassen")
 
+    -- KRITISCH: Auch aus activePlayers entfernen falls Spiel läuft
+    if game.round ~= "waiting" and game.activePlayers then
+        for i = #game.activePlayers, 1, -1 do
+            if game.activePlayers[i].id == clientId then
+                table.remove(game.activePlayers, i)
+                print("Spieler aus activePlayers entfernt")
+
+                -- Wenn Dealer entfernt wurde, passe dealerIndex an
+                if i <= game.dealerIndex then
+                    game.dealerIndex = math.max(1, game.dealerIndex - 1)
+                end
+
+                -- Wenn current player entfernt wurde, passe an
+                if i <= game.currentPlayerIndex then
+                    game.currentPlayerIndex = math.max(1, game.currentPlayerIndex - 1)
+                end
+                break
+            end
+        end
+
+        -- Prüfe ob genug Spieler übrig sind
+        if #game.activePlayers < config.minPlayers then
+            print("Nicht genug Spieler - beende Spiel")
+            game.round = "waiting"
+            game.pot = 0
+            game.currentBet = 0
+            game.communityCards = {}
+        end
+    end
+
     -- Benachrichtige andere
     for _, p in ipairs(game.players) do
         network.send(p.id, network.MSG.PLAYER_LEFT, {
@@ -248,7 +279,9 @@ startGame = function()
     -- Reset Spielstatus
     game.activePlayers = {}
     for _, player in ipairs(game.players) do
-        if player.chips > 0 then
+        -- Zuschauer (Name beginnt mit "Zuschauer_") werden übersprungen
+        local isSpectator = player.name:match("^Zuschauer_") ~= nil
+        if player.chips > 0 and not isSpectator then
             player.folded = false
             player.allIn = false
             player.bet = 0
@@ -317,8 +350,27 @@ end
 startBettingRound = function()
     print("=== Wettrunde: " .. game.round .. " ===")
 
+    -- SICHERHEIT: Prüfe ob activePlayers leer ist
+    if not game.activePlayers or #game.activePlayers == 0 then
+        print("FEHLER: Keine aktiven Spieler!")
+        game.round = "waiting"
+        broadcastGameState()
+        return
+    end
+
+    -- SICHERHEIT: Prüfe Index-Bounds
+    if game.currentPlayerIndex < 1 or game.currentPlayerIndex > #game.activePlayers then
+        print("FEHLER: Ungültiger currentPlayerIndex: " .. game.currentPlayerIndex)
+        game.currentPlayerIndex = 1
+    end
+
     -- Sende aktuellem Spieler "Your Turn"
     local currentPlayer = game.activePlayers[game.currentPlayerIndex]
+    if not currentPlayer then
+        print("FEHLER: Kein Spieler bei Index " .. game.currentPlayerIndex)
+        endBettingRound()
+        return
+    end
 
     network.send(currentPlayer.id, network.MSG.YOUR_TURN, {
         currentBet = game.currentBet,
@@ -394,11 +446,26 @@ end
 
 -- Nächster Spieler
 nextPlayer = function()
+    -- SICHERHEIT: Prüfe ob activePlayers leer ist (Division durch Null!)
+    if not game.activePlayers or #game.activePlayers == 0 then
+        print("FEHLER: Keine aktiven Spieler in nextPlayer!")
+        game.round = "waiting"
+        broadcastGameState()
+        return
+    end
+
     local startIndex = game.currentPlayerIndex
 
     repeat
         game.currentPlayerIndex = (game.currentPlayerIndex % #game.activePlayers) + 1
         local currentPlayer = game.activePlayers[game.currentPlayerIndex]
+
+        -- SICHERHEIT: Prüfe ob Spieler existiert
+        if not currentPlayer then
+            print("FEHLER: Kein Spieler bei Index " .. game.currentPlayerIndex)
+            endBettingRound()
+            return
+        end
 
         -- Prüfe ob dieser Spieler noch aktiv ist
         if not currentPlayer.folded and not currentPlayer.allIn then
@@ -419,7 +486,7 @@ nextPlayer = function()
 end
 
 -- Prüft ob Wettrunde komplett ist
-function isBettingRoundComplete()
+isBettingRoundComplete = function()
     for _, player in ipairs(game.activePlayers) do
         if not player.folded and not player.allIn then
             if player.bet < game.currentBet then
@@ -493,11 +560,14 @@ endHand = function()
         winner.chips = winner.chips + game.pot
         print("Gewinner: " .. winner.name .. " (alle gefoldet)")
 
-        network.send(winner.id, network.MSG.ROUND_END, {
-            winners = {winner.id},
-            pot = game.pot,
-            reason = "all_folded"
-        })
+        -- Benachrichtige ALLE Spieler über das Rundenergebnis
+        for _, player in ipairs(game.players) do
+            network.send(player.id, network.MSG.ROUND_END, {
+                winners = {winner.id},
+                pot = game.pot,
+                reason = "all_folded"
+            })
+        end
 
     else
         -- Bewerte Hände

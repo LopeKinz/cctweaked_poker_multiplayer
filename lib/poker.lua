@@ -153,6 +153,28 @@ function poker.isStraight(cards)
     return false
 end
 
+-- Prüft auf Straight Flush (5 aufeinanderfolgende Karten der gleichen Farbe)
+function poker.isStraightFlush(cards)
+    -- Gruppiere Karten nach Farbe
+    local suitGroups = {hearts = {}, diamonds = {}, clubs = {}, spades = {}}
+
+    for _, card in ipairs(cards) do
+        table.insert(suitGroups[card.suit], card)
+    end
+
+    -- Prüfe jede Farbe ob sie einen Straight bildet
+    for suit, suitCards in pairs(suitGroups) do
+        if #suitCards >= 5 then
+            local isStraight, straightHigh = poker.isStraight(suitCards)
+            if isStraight then
+                return true, straightHigh
+            end
+        end
+    end
+
+    return false
+end
+
 -- Bewertet eine Pokerhand (7 Karten)
 function poker.evaluateHand(cards)
     if #cards < 5 then
@@ -163,6 +185,7 @@ function poker.evaluateHand(cards)
     local rankCounts = poker.countRanks(cards)
     local isFlush, flushSuit = poker.isFlush(cards)
     local isStraight, straightHigh = poker.isStraight(cards)
+    local isSF, sfHigh = poker.isStraightFlush(cards)
 
     -- Zähle Paare, Drillinge, etc.
     local pairRanks = {}
@@ -183,8 +206,8 @@ function poker.evaluateHand(cards)
     table.sort(threes, function(a, b) return a > b end)
     table.sort(fours, function(a, b) return a > b end)
 
-    -- Royal Flush
-    if isFlush and isStraight and straightHigh == 14 then
+    -- Royal Flush (Straight Flush mit Ace high)
+    if isSF and sfHigh == 14 then
         return {
             rank = poker.HAND_RANKS.ROYAL_FLUSH,
             value = 14,
@@ -194,10 +217,10 @@ function poker.evaluateHand(cards)
     end
 
     -- Straight Flush
-    if isFlush and isStraight then
+    if isSF then
         return {
             rank = poker.HAND_RANKS.STRAIGHT_FLUSH,
-            value = straightHigh,
+            value = sfHigh,
             name = poker.HAND_NAMES[poker.HAND_RANKS.STRAIGHT_FLUSH],
             cards = sorted
         }
