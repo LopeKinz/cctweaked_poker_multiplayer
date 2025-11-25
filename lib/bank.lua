@@ -112,12 +112,13 @@ function bank.deposit(bridge, chest, itemName, amount)
     for slot = 1, chest.size() do
         local item = chest.getItemDetail(slot)
         if item and (item.name == itemName or not itemName) then
+            local depositCount = math.min(item.count, amount)
             table.insert(itemsToDeposit, {
                 slot = slot,
-                count = math.min(item.count, amount)
+                count = depositCount
             })
 
-            amount = amount - item.count
+            amount = amount - depositCount
             if amount <= 0 then break end
         end
     end
