@@ -29,37 +29,49 @@ end
 
 -- Holt Item-Details aus ME System
 function bank.getItemDetails(bridge, itemName)
-    if not bridge then return nil end
+    if not bridge then
+        return nil, "RS Bridge nicht initialisiert"
+    end
+
+    if not itemName then
+        return nil, "Kein Item-Name angegeben"
+    end
 
     -- Nur getItem verwenden (KEIN listItems!)
     if not bridge.getItem then
-        print("FEHLER: RS Bridge hat keine getItem() Methode!")
-        return nil
+        return nil, "RS Bridge hat keine getItem() Methode - Advanced Peripherals installiert?"
     end
 
-    local success, item = pcall(function()
+    local success, result = pcall(function()
         return bridge.getItem({name = itemName})
     end)
 
-    if success and item then
-        return item
+    if not success then
+        return nil, "Fehler beim Abrufen von Item-Details: " .. tostring(result)
     end
 
-    return nil
+    if success and result then
+        return result, nil
+    end
+
+    return nil, "Item nicht gefunden: " .. itemName
 end
 
 -- Zählt Chips im ME System
 function bank.getBalance(bridge, itemFilter)
-    if not bridge then return 0 end
+    if not bridge then
+        print("WARNUNG: RS Bridge nicht initialisiert - Balance = 0")
+        return 0
+    end
 
     if not itemFilter then
-        print("FEHLER: Kein Item-Filter angegeben!")
+        print("FEHLER: Kein Item-Filter angegeben für getBalance()")
         return 0
     end
 
     -- Verwende NUR getItem() - KEIN listItems()
     if not bridge.getItem then
-        print("FEHLER: RS Bridge hat keine getItem() Methode!")
+        print("FEHLER: RS Bridge hat keine getItem() Methode - Advanced Peripherals installiert?")
         return 0
     end
 
@@ -67,29 +79,44 @@ function bank.getBalance(bridge, itemFilter)
         return bridge.getItem({name = itemFilter})
     end)
 
+    if not success then
+        print("WARNUNG: Fehler beim Abrufen der Balance: " .. tostring(item))
+        return 0
+    end
+
     if success and item and item.amount then
         return item.amount
     end
 
+    -- Item nicht im System = 0 Balance (kein Fehler)
     return 0
 end
 
 -- Exportiert Items aus ME System in Truhe
 function bank.withdraw(bridge, chest, itemName, amount, direction)
-    if not bridge or not chest then
-        return false, "Bridge oder Truhe nicht verfunden"
+    if not bridge then
+        return false, "RS Bridge nicht initialisiert"
     end
 
-    if amount < bank.config.minWithdraw then
-        return false, "Betrag zu klein"
+    if not chest then
+        return false, "Truhe nicht initialisiert"
+    end
+
+    if not itemName then
+        return false, "Kein Item-Name angegeben"
+    end
+
+    if not amount or amount < bank.config.minWithdraw then
+        return false, "Betrag zu klein (min: " .. bank.config.minWithdraw .. ")"
     end
 
     if amount > bank.config.maxWithdraw then
-        return false, "Betrag zu groß"
+        return false, "Betrag zu groß (max: " .. bank.config.maxWithdraw .. ")"
     end
 
     -- Versuche alle Richtungen wenn keine angegeben
     local directions = direction and {direction} or {"down", "up", "north", "south", "east", "west"}
+    local lastError = nil
 
     for _, dir in ipairs(directions) do
         local success, result = pcall(function()
@@ -100,18 +127,29 @@ function bank.withdraw(bridge, chest, itemName, amount, direction)
         end)
 
         if success and result and result > 0 then
-            print("Erfolgreich exportiert: " .. result .. " Items in Richtung " .. dir)
+            print("Erfolgreich exportiert: " .. result .. " " .. itemName .. " in Richtung " .. dir)
             return true, result
+        elseif not success then
+            lastError = result
         end
     end
 
-    return false, "Export fehlgeschlagen in alle Richtungen"
+    local errorMsg = "Export fehlgeschlagen für " .. itemName .. " (" .. amount .. " Items)"
+    if lastError then
+        errorMsg = errorMsg .. ": " .. tostring(lastError)
+    end
+
+    return false, errorMsg
 end
 
 -- Importiert Items von Truhe in ME System
 function bank.deposit(bridge, chest, itemName, amount, direction)
-    if not bridge or not chest then
-        return false, "Bridge oder Truhe nicht gefunden"
+    if not bridge then
+        return false, "RS Bridge nicht initialisiert"
+    end
+
+    if not chest then
+        return false, "Truhe nicht initialisiert"
     end
 
     -- Finde Items in Truhe

@@ -1,6 +1,19 @@
 -- ui.lua - Simple Functional Poker UI
 local ui = {}
 
+-- Layout Constants
+ui.LAYOUT = {
+    CARD_WIDTH = 5,
+    CARD_HEIGHT = 3,
+    CARD_SPACING = 6,
+    TABLE_MARGIN = 4,
+    TABLE_BORDER_WIDTH = 1,
+    PLAYER_BOX_WIDTH = 20,
+    PLAYER_BOX_HEIGHT = 5,
+    MIN_TEXT_SCALE = 0.5,
+    MAX_TEXT_SCALE = 5.0
+}
+
 -- Simple Color Scheme
 ui.COLORS = {
     -- Table
@@ -181,8 +194,8 @@ function ui:drawCard(x, y, card, faceDown)
     x = math.floor(x)
     y = math.floor(y)
 
-    local width = 5
-    local height = 3
+    local width = ui.LAYOUT.CARD_WIDTH
+    local height = ui.LAYOUT.CARD_HEIGHT
 
     if faceDown then
         self:drawBox(x, y, width, height, ui.COLORS.CARD_BACK)
@@ -200,18 +213,18 @@ end
 
 -- Player box
 function ui:drawPlayerBox(position, player, isDealer, isSmallBlind, isBigBlind, isActive, isMe)
+    local boxWidth = ui.LAYOUT.PLAYER_BOX_WIDTH
+    local boxHeight = ui.LAYOUT.PLAYER_BOX_HEIGHT
+
     local positions = {
         {x = 3, y = math.floor(self.height / 2) - 2, side = "left"},   -- Left
-        {x = math.floor(self.width / 2) - 10, y = 3, side = "top"},    -- Top
-        {x = self.width - 23, y = math.floor(self.height / 2) - 2, side = "right"}, -- Right
-        {x = math.floor(self.width / 2) - 10, y = self.height - 6, side = "bottom"} -- Bottom (me)
+        {x = math.floor(self.width / 2) - math.floor(boxWidth / 2), y = 3, side = "top"},    -- Top
+        {x = self.width - boxWidth - 3, y = math.floor(self.height / 2) - 2, side = "right"}, -- Right
+        {x = math.floor(self.width / 2) - math.floor(boxWidth / 2), y = self.height - 6, side = "bottom"} -- Bottom (me)
     }
 
     local pos = positions[position]
     if not pos then return end
-
-    local boxWidth = 20
-    local boxHeight = 5
 
     -- Ensure box stays within bounds
     if pos.x + boxWidth > self.width then
@@ -275,12 +288,12 @@ end
 function ui:drawCommunityCards(cards, round)
     if not cards or #cards == 0 then return end
 
-    local totalWidth = #cards * 6 - 1
+    local totalWidth = #cards * ui.LAYOUT.CARD_SPACING - 1
     local startX = math.floor((self.width - totalWidth) / 2)
     local y = math.floor(self.height / 2) - 2
 
     for i, card in ipairs(cards) do
-        self:drawCard(startX + (i - 1) * 6, y, card, false)
+        self:drawCard(startX + (i - 1) * ui.LAYOUT.CARD_SPACING, y, card, false)
     end
 end
 
@@ -299,11 +312,11 @@ end
 function ui:drawOwnCards(cards)
     if not cards or #cards ~= 2 then return end
 
-    local startX = math.floor(self.width / 2) - 6
+    local startX = math.floor(self.width / 2) - ui.LAYOUT.CARD_SPACING
     local y = self.height - 4
 
     self:drawCard(startX, y, cards[1], false)
-    self:drawCard(startX + 6, y, cards[2], false)
+    self:drawCard(startX + ui.LAYOUT.CARD_SPACING, y, cards[2], false)
 end
 
 -- Hand evaluation
@@ -320,6 +333,16 @@ function ui:clearButtons()
 end
 
 function ui:addButton(id, x, y, width, height, text, callback, color, enabled)
+    -- Validate button ID
+    if not id or type(id) ~= "string" or id == "" then
+        error("Button ID muss ein nicht-leerer String sein")
+    end
+
+    -- Warn if button already exists (preventing memory leak from duplicates)
+    if self.buttons[id] then
+        print("WARNUNG: Button '" .. id .. "' wird überschrieben")
+    end
+
     x = math.floor(x)
     y = math.floor(y)
     width = math.floor(width)

@@ -113,18 +113,24 @@ local function countChips()
 
         if client.chest then
             local chestSize = client.chest.size()
-            print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+            if config.debug then
+                print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+            end
 
             for slot = 1, chestSize do
                 local item = client.chest.getItemDetail(slot)
                 if item and item.name == config.chipItem then
-                    print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
+                    if config.debug then
+                        print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
+                    end
                     chestChips = chestChips + item.count
                 end
             end
         end
 
-        print("DEBUG: ME Balance = " .. meBalance .. ", Truhe Chips = " .. chestChips)
+        if config.debug then
+            print("DEBUG: ME Balance = " .. meBalance .. ", Truhe Chips = " .. chestChips)
+        end
         return meBalance + chestChips
     else
         -- Standard: Zähle nur in Truhe
@@ -132,17 +138,23 @@ local function countChips()
 
         local total = 0
         local chestSize = client.chest.size()
-        print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+        if config.debug then
+            print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+        end
 
         for slot = 1, chestSize do
             local item = client.chest.getItemDetail(slot)
             if item and item.name == config.chipItem then
-                print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
+                if config.debug then
+                    print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
+                end
                 total = total + item.count
             end
         end
 
-        print("DEBUG: Gesamt Chips = " .. total)
+        if config.debug then
+            print("DEBUG: Gesamt Chips = " .. total)
+        end
         return total
     end
 end
@@ -540,13 +552,19 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
     -- minRaise default (sollte vom Server kommen)
     minRaise = minRaise or 20
 
-    local btnY = client.ui.height - 2
-    local btnWidth = math.floor((client.ui.width - 18) / 6)
-    local btnHeight = 2
+    -- Layout Constants
+    local BTN_COUNT = 6
+    local BTN_SPACING = 2
+    local BTN_HEIGHT = 2
+    local BTN_MARGIN = 4
 
-    local spacing = 2
-    local totalWidth = btnWidth * 6 + spacing * 5
+    local btnY = client.ui.height - 2
+    local btnWidth = math.floor((client.ui.width - (BTN_SPACING * (BTN_COUNT - 1)) - (BTN_MARGIN * 2)) / BTN_COUNT)
+    local btnHeight = BTN_HEIGHT
+
+    local totalWidth = btnWidth * BTN_COUNT + BTN_SPACING * (BTN_COUNT - 1)
     local startX = math.floor((client.ui.width - totalWidth) / 2)
+    local spacing = BTN_SPACING
 
     -- Fold
     client.ui:addButton("fold", startX, btnY, btnWidth, btnHeight, "FOLD", function()
@@ -638,71 +656,67 @@ end
 
 -- Behandelt Spielstatus-Update
 local function handleGameState(state)
-    print("DEBUG: handleGameState() aufgerufen, round=" .. (state.round or "nil"))
+    if config.debug then
+        print("DEBUG: handleGameState() aufgerufen, round=" .. (state.round or "nil"))
+    end
+
     client.gameState = state
 
     if state.myCards then
         client.myCards = state.myCards
     end
 
-    -- Zeichne ZUERST, damit UI schnell aktualisiert wird
+    -- Zeichne UI (schnell, nicht blockierend)
     if state.round == "waiting" then
         drawLobby()
     else
         drawPokerTable()
     end
 
-    -- DANN Chip-Sync im Hintergrund (nicht blockierend für Event-Loop)
-    -- Nur syncen wenn nicht im Turn (sonst würden Buttons überschrieben)
-    if config.useBank and client.playerId and state.currentPlayerIndex then
-        local isMyTurn = false
-        for i, player in ipairs(state.players) do
-            if player.id == client.playerId and i == state.currentPlayerIndex then
-                isMyTurn = true
-                break
-            end
-        end
-
-        -- Nur syncen wenn NICHT am Zug (sonst kommen Buttons nicht an)
-        if not isMyTurn then
-            for _, player in ipairs(state.players) do
-                if player.id == client.playerId then
-                    syncChipsWithBank(player.chips)
-                    break
-                end
-            end
-        end
-    end
+    -- KEIN Chip-Sync hier! Das verursacht Race Conditions.
+    -- Chip-Sync erfolgt nur bei:
+    -- 1. handleYourTurn() - Wenn Spieler am Zug ist
+    -- 2. handleRoundEnd() - Nach Runde
+    -- 3. GAME_END - Zurück zur Lobby
 end
 
 -- Behandelt "Your Turn"
 local function handleYourTurn(data)
-    print("DEBUG: handleYourTurn() aufgerufen!")
-    print("DEBUG: canCheck=" .. tostring(data.canCheck) .. ", currentBet=" .. tostring(data.currentBet))
+    if config.debug then
+        print("DEBUG: handleYourTurn() aufgerufen!")
+        print("DEBUG: canCheck=" .. tostring(data.canCheck) .. ", currentBet=" .. tostring(data.currentBet))
+    end
 
     -- Zuschauer bekommen keinen Turn
     if client.isSpectator then
-        print("DEBUG: Bin Zuschauer, keine Buttons")
+        if config.debug then
+            print("DEBUG: Bin Zuschauer, keine Buttons")
+        end
         return
     end
 
     -- Finde eigene Spieler-Daten
     local myPlayer = nil
-    for _, player in ipairs(client.gameState.players) do
-        if player.id == client.playerId then
-            myPlayer = player
-            break
+    if client.gameState and client.gameState.players then
+        for _, player in ipairs(client.gameState.players) do
+            if player.id == client.playerId then
+                myPlayer = player
+                break
+            end
         end
     end
 
     if not myPlayer then
-        print("DEBUG: FEHLER - myPlayer nicht gefunden!")
+        print("FEHLER: Eigene Spielerdaten nicht gefunden! Client-ID: " .. tostring(client.playerId))
+        client.ui:showMessage("FEHLER:\nSpielerdaten nicht gefunden!", 3, ui.COLORS.BTN_FOLD)
         return
     end
 
-    print("DEBUG: myPlayer gefunden: chips=" .. myPlayer.chips .. ", bet=" .. myPlayer.bet)
+    if config.debug then
+        print("DEBUG: myPlayer gefunden: chips=" .. myPlayer.chips .. ", bet=" .. myPlayer.bet)
+    end
 
-    -- Sync Chips JETZT (wenn am Zug)
+    -- Sync Chips JETZT (wenn am Zug) - non-blocking
     if config.useBank then
         syncChipsWithBank(myPlayer.chips)
     end
@@ -713,7 +727,10 @@ local function handleYourTurn(data)
     -- Zeichne Tisch und Buttons
     drawPokerTable()
 
-    print("DEBUG: Zeichne Action-Buttons...")
+    if config.debug then
+        print("DEBUG: Zeichne Action-Buttons...")
+    end
+
     drawActionButtons(
         data.canCheck,
         data.currentBet,
@@ -721,7 +738,10 @@ local function handleYourTurn(data)
         myPlayer.chips,
         data.minRaise
     )
-    print("DEBUG: Action-Buttons gezeichnet!")
+
+    if config.debug then
+        print("DEBUG: Action-Buttons gezeichnet!")
+    end
 
     -- Starte Timer
     client.ui:startTimer(config.turnTimeout or 60)
