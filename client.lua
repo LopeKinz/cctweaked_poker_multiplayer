@@ -411,7 +411,8 @@ local function drawLobby()
             if canStart then
                 network.send(client.serverId, network.MSG.READY, {ready = true})
                 client.ui:clearButtons()
-                client.ui:showMessage("Starte Spiel...", 2, ui.COLORS.BTN_CALL)
+                client.ui:showMessage("Starte Spiel...\nWarte auf Server...", nil, ui.COLORS.BTN_CALL)
+                -- Kein Timeout - warte bis GAME_STATE kommt
             end
         end, btnColor, canStart)
 
