@@ -134,6 +134,23 @@ function ui:drawText(x, y, text, fgColor, bgColor)
     x = math.floor(x)
     y = math.floor(y)
 
+    -- Clip text if it goes beyond screen bounds
+    if x < 1 then
+        local offset = 1 - x
+        text = text:sub(offset + 1)
+        x = 1
+    end
+
+    if x > self.width then return end
+
+    -- Clip text if it extends beyond right edge
+    local maxLen = self.width - x + 1
+    if #text > maxLen then
+        text = text:sub(1, maxLen)
+    end
+
+    if #text == 0 then return end
+
     self.monitor.setCursorPos(x, y)
     self.monitor.setTextColor(fgColor)
     self.monitor.setBackgroundColor(bgColor)
@@ -196,25 +213,43 @@ function ui:drawPlayerBox(position, player, isDealer, isSmallBlind, isBigBlind, 
     local boxWidth = 20
     local boxHeight = 5
 
+    -- Ensure box stays within bounds
+    if pos.x + boxWidth > self.width then
+        pos.x = self.width - boxWidth
+    end
+    if pos.x < 1 then pos.x = 1 end
+    if pos.y + boxHeight > self.height then
+        pos.y = self.height - boxHeight
+    end
+    if pos.y < 1 then pos.y = 1 end
+
     -- Box color
     local boxColor = isActive and ui.COLORS.ACTIVE or ui.COLORS.PANEL
 
     self:drawBox(pos.x, pos.y, boxWidth, boxHeight, boxColor)
     self:drawBorder(pos.x, pos.y, boxWidth, boxHeight, ui.COLORS.TABLE_BORDER)
 
-    -- Name
+    -- Name (clip to fit in box)
     local name = player.name
     if #name > boxWidth - 2 then
         name = name:sub(1, boxWidth - 5) .. "..."
     end
     self:drawText(pos.x + 1, pos.y + 1, name, ui.COLORS.TEXT_WHITE, boxColor)
 
-    -- Chips
-    self:drawText(pos.x + 1, pos.y + 2, "Chips: " .. player.chips, ui.COLORS.CHIPS_GREEN, boxColor)
+    -- Chips (clip to fit in box)
+    local chipsText = "Chips: " .. player.chips
+    if #chipsText > boxWidth - 2 then
+        chipsText = player.chips .. ""  -- Just show number if too long
+    end
+    self:drawText(pos.x + 1, pos.y + 2, chipsText, ui.COLORS.CHIPS_GREEN, boxColor)
 
-    -- Bet
+    -- Bet (clip to fit in box)
     if player.bet > 0 then
-        self:drawText(pos.x + 1, pos.y + 3, "Bet: " .. player.bet, ui.COLORS.TEXT_YELLOW, boxColor)
+        local betText = "Bet: " .. player.bet
+        if #betText > boxWidth - 2 then
+            betText = "B:" .. player.bet  -- Shorten if too long
+        end
+        self:drawText(pos.x + 1, pos.y + 3, betText, ui.COLORS.TEXT_YELLOW, boxColor)
     end
 
     -- Status
