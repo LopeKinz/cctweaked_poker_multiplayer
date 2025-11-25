@@ -1,9 +1,16 @@
--- server.lua - Poker Server
+--[[
+Server-side controller for the multiplayer poker table. The original
+implementation grew organically and mixed concerns (logging, validation,
+configuration) across the file. The server now leans on shared runtime helpers
+for consistent logging and safer error handling while keeping the gameplay
+rules intact.
+--]]
+
 local poker = require("lib.poker")
 local network = require("lib.network")
+local runtime = require("lib.runtime")
 
--- Konfiguration
-local config = {
+local defaultConfig = {
     minPlayers = 2,  -- Mindestens 2 Spieler
     maxPlayers = 4,
     smallBlind = 10,
@@ -17,6 +24,126 @@ local config = {
     errorRebootDelay = 30,    -- Delay before auto-reboot on error
     debug = false             -- Debug output
 }
+
+local configValidators = {
+    {
+        key = "minPlayers",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.minPlayers, "minPlayers muss eine Zahl sein"
+            end
+
+            value = math.max(2, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "maxPlayers",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.maxPlayers, "maxPlayers muss eine Zahl sein"
+            end
+
+            value = math.floor(value)
+            if value < (cfg.minPlayers or defaults.minPlayers) then
+                return cfg.minPlayers or defaults.minPlayers, "maxPlayers darf nicht kleiner als minPlayers sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "smallBlind",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.smallBlind, "smallBlind muss eine Zahl sein"
+            end
+
+            value = math.max(1, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "bigBlind",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.bigBlind, "bigBlind muss eine Zahl sein"
+            end
+
+            value = math.max(cfg.smallBlind or defaults.smallBlind, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "startingChips",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.startingChips, "startingChips muss eine Zahl sein"
+            end
+
+            value = math.max(cfg.bigBlind or defaults.bigBlind, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "turnTimeout",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value <= 0 then
+                return defaults.turnTimeout, "turnTimeout muss > 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "gameStartDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.gameStartDelay, "gameStartDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "roundTransitionDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.roundTransitionDelay, "roundTransitionDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "showdownDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.showdownDelay, "showdownDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "errorRebootDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.errorRebootDelay, "errorRebootDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "debug",
+        validate = function(value, cfg, defaults)
+            return value == true
+        end
+    }
+}
+
+local config = runtime.loadConfig(defaultConfig, "config.lua", configValidators)
 
 -- Spielleiter (erster Spieler der beitritt)
 local gameMaster = nil
@@ -36,6 +163,10 @@ local game = {
     roundBets = {}
 }
 
+local function logDebug(...)
+    runtime.debug(config.debug, ...)
+end
+
 -- Forward declarations
 local startGame
 local placeBet
@@ -49,6 +180,11 @@ local isBettingRoundComplete
 
 -- Fügt Spieler hinzu
 local function addPlayer(clientId, playerName, initialChips)
+    if not clientId or not playerName then
+        runtime.warn("JOIN abgelehnt: fehlende Parameter von", tostring(clientId))
+        return false
+    end
+
     if #game.players >= config.maxPlayers then
         network.send(clientId, network.MSG.ERROR, {message = "Spiel ist voll"})
         return false
@@ -62,8 +198,15 @@ local function addPlayer(clientId, playerName, initialChips)
         end
     end
 
-    -- Verwende Client-Chips falls vorhanden, sonst Standardwert
-    local startChips = initialChips or config.startingChips
+    -- Verwende Client-Chips falls vorhanden, aber deckel auf Server-Config
+    local startChips = tonumber(initialChips) or config.startingChips
+    if startChips < 0 then
+        runtime.warn("Startchips kleiner als 0 - setze auf Standardwert")
+        startChips = config.startingChips
+    elseif startChips > config.startingChips then
+        runtime.warn("Startchips von", playerName, "auf", startChips, "begrenzt auf", config.startingChips)
+        startChips = config.startingChips
+    end
 
     local player = {
         id = clientId,
@@ -86,11 +229,11 @@ local function addPlayer(clientId, playerName, initialChips)
 
     if not gameMaster and not isSpectator then
         gameMaster = clientId
-        print("Spieler " .. playerName .. " ist jetzt SPIELLEITER (" .. clientId .. ")")
+        runtime.info("Spieler", playerName, "ist jetzt SPIELLEITER (" .. clientId .. ")")
     elseif isSpectator then
-        print("Zuschauer " .. playerName .. " beigetreten (" .. clientId .. ")")
+        runtime.info("Zuschauer", playerName, "beigetreten (" .. clientId .. ")")
     else
-        print("Spieler " .. playerName .. " beigetreten (" .. clientId .. ")")
+        runtime.info("Spieler", playerName, "beigetreten (" .. clientId .. ")")
     end
 
     -- Sende Willkommensnachricht
@@ -163,14 +306,14 @@ local function removePlayer(clientId)
     -- Entferne Spieler
     table.remove(game.players, playerIndex)
     game.playerMap[clientId] = nil  -- Remove from hash map
-    print("Spieler " .. playerData.name .. " hat verlassen")
+    runtime.info("Spieler", playerData.name, "hat verlassen")
 
     -- KRITISCH: Auch aus activePlayers entfernen falls Spiel läuft
     if game.round ~= "waiting" and game.activePlayers then
         for i = #game.activePlayers, 1, -1 do
             if game.activePlayers[i].id == clientId then
                 table.remove(game.activePlayers, i)
-                print("Spieler aus activePlayers entfernt")
+                logDebug("Spieler aus activePlayers entfernt")
 
                 -- Wenn Dealer entfernt wurde, passe dealerIndex an
                 if i <= game.dealerIndex then
@@ -187,7 +330,7 @@ local function removePlayer(clientId)
 
         -- Prüfe ob genug Spieler übrig sind
         if #game.activePlayers < config.minPlayers then
-            print("Nicht genug Spieler - beende Spiel")
+            runtime.warn("Nicht genug Spieler - beende Spiel")
             game.round = "waiting"
             game.pot = 0
             game.currentBet = 0
@@ -210,7 +353,7 @@ local function removePlayer(clientId)
             local pIsSpectator = p.name:match("^Zuschauer_") ~= nil
             if not pIsSpectator then
                 gameMaster = p.id
-                print("Neuer Spielleiter: " .. p.name .. " (" .. p.id .. ")")
+                runtime.info("Neuer Spielleiter:", p.name .. " (" .. p.id .. ")")
                 break
             end
         end
@@ -218,14 +361,14 @@ local function removePlayer(clientId)
         -- Falls alle Zuschauer sind, setze ersten als Spielleiter
         if not gameMaster and #game.players > 0 then
             gameMaster = game.players[1].id
-            print("Neuer Spielleiter (Zuschauer): " .. game.players[1].name)
+            runtime.info("Neuer Spielleiter (Zuschauer):", game.players[1].name)
         end
     end
 
     -- Wenn keine Spieler mehr da sind, setze Spielleiter zurück
     if #game.players == 0 then
         gameMaster = nil
-        print("Alle Spieler haben verlassen")
+        runtime.warn("Alle Spieler haben verlassen")
     end
 
     -- Broadcast aktuellen Spielstatus an alle
@@ -253,7 +396,7 @@ local function setPlayerReady(clientId, ready)
         return
     end
 
-    print("Spielleiter startet das Spiel mit " .. #game.players .. " Spielern")
+    runtime.info("Spielleiter startet das Spiel mit", #game.players, "Spielern")
 
     -- Alle Spieler als bereit markieren
     for _, p in ipairs(game.players) do
@@ -281,7 +424,7 @@ end
 
 -- Startet neue Runde
 startGame = function()
-    print("=== Starte neues Spiel ===")
+    runtime.info("=== Starte neues Spiel ===")
 
     -- Reset Spielstatus
     game.activePlayers = {}
@@ -298,7 +441,7 @@ startGame = function()
     end
 
     if #game.activePlayers < config.minPlayers then
-        print("Nicht genug Spieler mit Chips!")
+        runtime.warn("Nicht genug Spieler mit Chips!")
         return
     end
 
@@ -320,10 +463,11 @@ startGame = function()
     placeBet(smallBlindPlayer, config.smallBlind)
     placeBet(bigBlindPlayer, config.bigBlind)
 
-    game.currentBet = config.bigBlind
+    -- Setze currentBet auf den tatsächlich geposteten Big Blind (auch bei Short Stacks)
+    game.currentBet = bigBlindPlayer.bet
 
     -- Benachrichtige Clients über Spielstart
-    print("Sende GAME_START an alle Clients...")
+    runtime.info("Sende GAME_START an alle Clients...")
     for _, player in ipairs(game.players) do
         network.send(player.id, network.MSG.GAME_START, {})
     end
@@ -360,16 +504,14 @@ end
 
 -- Startet Wettrunde
 startBettingRound = function()
-    print("=== Wettrunde: " .. game.round .. " ===")
+    runtime.info("=== Wettrunde:", game.round, "===")
 
-    if config.debug then
-        print("DEBUG: activePlayers count = " .. #game.activePlayers)
-        print("DEBUG: currentPlayerIndex = " .. game.currentPlayerIndex)
-    end
+    logDebug("activePlayers count = " .. #game.activePlayers)
+    logDebug("currentPlayerIndex = " .. game.currentPlayerIndex)
 
     -- SICHERHEIT: Prüfe ob activePlayers leer ist
     if not game.activePlayers or #game.activePlayers == 0 then
-        print("FEHLER: Keine aktiven Spieler!")
+        runtime.error("Keine aktiven Spieler!")
         game.round = "waiting"
         broadcastGameState()
         return
@@ -377,22 +519,20 @@ startBettingRound = function()
 
     -- SICHERHEIT: Prüfe Index-Bounds
     if game.currentPlayerIndex < 1 or game.currentPlayerIndex > #game.activePlayers then
-        print("FEHLER: Ungültiger currentPlayerIndex: " .. game.currentPlayerIndex)
+        runtime.error("Ungültiger currentPlayerIndex:", game.currentPlayerIndex)
         game.currentPlayerIndex = 1
     end
 
     -- Sende aktuellem Spieler "Your Turn"
     local currentPlayer = game.activePlayers[game.currentPlayerIndex]
     if not currentPlayer then
-        print("FEHLER: Kein Spieler bei Index " .. game.currentPlayerIndex)
+        runtime.error("Kein Spieler bei Index", game.currentPlayerIndex)
         endBettingRound()
         return
     end
 
-    if config.debug then
-        print("DEBUG: Sende YOUR_TURN an Spieler: " .. currentPlayer.name .. " (ID: " .. currentPlayer.id .. ")")
-        print("DEBUG: currentBet=" .. game.currentBet .. ", canCheck=" .. tostring(currentPlayer.bet >= game.currentBet))
-    end
+    logDebug("Sende YOUR_TURN an Spieler: " .. currentPlayer.name .. " (ID: " .. currentPlayer.id .. ")")
+    logDebug("currentBet=" .. game.currentBet .. ", canCheck=" .. tostring(currentPlayer.bet >= game.currentBet))
 
     network.send(currentPlayer.id, network.MSG.YOUR_TURN, {
         currentBet = game.currentBet,
@@ -400,9 +540,7 @@ startBettingRound = function()
         canCheck = currentPlayer.bet >= game.currentBet
     })
 
-    if config.debug then
-        print("DEBUG: YOUR_TURN gesendet!")
-    end
+    logDebug("YOUR_TURN gesendet!")
 
     -- Starte Timer
     local timeoutTimer = os.startTimer(config.turnTimeout)
@@ -413,19 +551,45 @@ startBettingRound = function()
 
         if event == "timer" and param1 == timeoutTimer then
             -- Timeout - automatisch fold
-            print("Timeout für " .. currentPlayer.name)
+            runtime.warn("Timeout für", currentPlayer.name)
             handlePlayerAction(currentPlayer.id, "fold", 0)
             break
         elseif event == "rednet_message" then
             local senderId = param1
             local message = param2
 
-            if message.type == network.MSG.ACTION and senderId == currentPlayer.id then
+            if type(message) ~= "table" or not message.type then
+                runtime.warn("Ungültige Nachricht während Wettrunde von", tostring(senderId))
+            elseif message.type == network.MSG.ACTION and senderId == currentPlayer.id then
                 os.cancelTimer(timeoutTimer)
                 local action = message.data.action
                 local amount = message.data.amount or 0
                 handlePlayerAction(senderId, action, amount)
                 break
+            elseif message.type == network.MSG.LEAVE then
+                removePlayer(senderId)
+
+                if senderId == currentPlayer.id then
+                    os.cancelTimer(timeoutTimer)
+
+                    if game.round ~= "waiting" and game.activePlayers and #game.activePlayers > 0 then
+                        nextPlayer()
+                    end
+
+                    break
+                end
+            elseif message.type == network.MSG.JOIN then
+                addPlayer(senderId, message.data and message.data.playerName, message.data and message.data.chips)
+            elseif message.type == network.MSG.READY then
+                setPlayerReady(senderId, message.data and message.data.ready)
+            elseif message.type == network.MSG.PING then
+                network.send(senderId, network.MSG.PONG, {})
+            elseif message.type == network.MSG.HEARTBEAT then
+                network.send(senderId, network.MSG.PONG, {})
+                local pingedPlayer = getPlayer(senderId)
+                if pingedPlayer then
+                    pingedPlayer.connected = true
+                end
             end
         end
     end
@@ -435,20 +599,20 @@ end
 handlePlayerAction = function(clientId, action, amount)
     local player = getPlayer(clientId)
     if not player then
-        print("FEHLER: Spieler nicht gefunden: " .. tostring(clientId))
+        runtime.error("Spieler nicht gefunden:", tostring(clientId))
         return
     end
 
     -- INPUT VALIDATION
     if not action or type(action) ~= "string" then
-        print("FEHLER: Ungültige Aktion von " .. player.name)
+        runtime.error("Ungültige Aktion von", player.name)
         return
     end
 
     -- Validate amount for raise
     if action == "raise" then
         if not amount or type(amount) ~= "number" or amount < 0 then
-            print("FEHLER: Ungültiger Raise-Betrag von " .. player.name .. ": " .. tostring(amount))
+            runtime.error("Ungültiger Raise-Betrag von", player.name .. ": " .. tostring(amount))
             network.send(clientId, network.MSG.ERROR, {message = "Ungültiger Raise-Betrag"})
             return
         end
@@ -456,7 +620,7 @@ handlePlayerAction = function(clientId, action, amount)
         -- Validate minimum raise
         local minRaise = config.bigBlind
         if amount < minRaise then
-            print("FEHLER: Raise-Betrag zu klein: " .. amount .. " < " .. minRaise)
+            runtime.error("Raise-Betrag zu klein:", amount, "<", minRaise)
             network.send(clientId, network.MSG.ERROR, {message = "Raise-Betrag zu klein (min: " .. minRaise .. ")"})
             return
         end
@@ -464,13 +628,13 @@ handlePlayerAction = function(clientId, action, amount)
         -- Validate maximum raise (can't raise more than you have)
         local raiseAmount = game.currentBet - player.bet + amount
         if raiseAmount > player.chips then
-            print("FEHLER: Raise-Betrag zu groß: " .. raiseAmount .. " > " .. player.chips)
+            runtime.error("Raise-Betrag zu groß:", raiseAmount, ">", player.chips)
             network.send(clientId, network.MSG.ERROR, {message = "Nicht genug Chips"})
             return
         end
     end
 
-    print(player.name .. " -> " .. action .. " (" .. (amount or 0) .. ")")
+    runtime.info(player.name .. " -> " .. action .. " (" .. (amount or 0) .. ")")
 
     if action == "fold" then
         player.folded = true
@@ -478,7 +642,7 @@ handlePlayerAction = function(clientId, action, amount)
     elseif action == "check" then
         -- Validate check is allowed
         if player.bet < game.currentBet then
-            print("FEHLER: Check nicht erlaubt - muss callen")
+            runtime.error("Check nicht erlaubt - muss callen")
             network.send(clientId, network.MSG.ERROR, {message = "Check nicht erlaubt - muss callen"})
             return
         end
@@ -496,7 +660,7 @@ handlePlayerAction = function(clientId, action, amount)
     elseif action == "all-in" then
         local allInAmount = player.chips
         if allInAmount <= 0 then
-            print("FEHLER: Keine Chips für All-In")
+            runtime.error("Keine Chips für All-In")
             return
         end
         placeBet(player, allInAmount)
@@ -504,7 +668,7 @@ handlePlayerAction = function(clientId, action, amount)
             game.currentBet = player.bet
         end
     else
-        print("FEHLER: Unbekannte Aktion: " .. tostring(action))
+        runtime.error("Unbekannte Aktion:", tostring(action))
         return
     end
 
@@ -521,7 +685,7 @@ end
 nextPlayer = function()
     -- SICHERHEIT: Prüfe ob activePlayers leer ist (Division durch Null!)
     if not game.activePlayers or #game.activePlayers == 0 then
-        print("FEHLER: Keine aktiven Spieler in nextPlayer!")
+        runtime.error("Keine aktiven Spieler in nextPlayer!")
         game.round = "waiting"
         broadcastGameState()
         return
@@ -535,7 +699,7 @@ nextPlayer = function()
 
         -- SICHERHEIT: Prüfe ob Spieler existiert
         if not currentPlayer then
-            print("FEHLER: Kein Spieler bei Index " .. game.currentPlayerIndex)
+            runtime.error("Kein Spieler bei Index", game.currentPlayerIndex)
             endBettingRound()
             return
         end
@@ -572,7 +736,7 @@ end
 
 -- Beendet Wettrunde
 endBettingRound = function()
-    print("=== Wettrunde beendet ===")
+    runtime.info("=== Wettrunde beendet ===")
 
     -- Reset Einsätze
     for _, player in ipairs(game.activePlayers) do
@@ -617,7 +781,7 @@ end
 
 -- Beendet Hand (Showdown)
 endHand = function()
-    print("=== Showdown ===")
+    runtime.info("=== Showdown ===")
 
     -- Zähle aktive Spieler
     local activePlayers = {}
@@ -631,7 +795,7 @@ endHand = function()
         -- Nur ein Spieler übrig
         local winner = activePlayers[1]
         winner.chips = winner.chips + game.pot
-        print("Gewinner: " .. winner.name .. " (alle gefoldet)")
+        runtime.info("Gewinner:", winner.name .. " (alle gefoldet)")
 
         -- Benachrichtige ALLE Spieler über das Rundenergebnis
         for _, player in ipairs(game.players) do
@@ -655,7 +819,7 @@ endHand = function()
             end
 
             hands[player.id] = poker.evaluateHand(allCards)
-            print(player.name .. ": " .. hands[player.id].name)
+            runtime.info(player.name .. ": " .. hands[player.id].name)
         end
 
         -- Finde Gewinner
@@ -663,10 +827,13 @@ endHand = function()
 
         -- Verteile Pot
         local winAmount = math.floor(game.pot / #winners)
-        for _, winnerId in ipairs(winners) do
+        local remainder = game.pot - (winAmount * #winners)
+
+        for index, winnerId in ipairs(winners) do
             local winner = getPlayer(winnerId)
-            winner.chips = winner.chips + winAmount
-            print("Gewinner: " .. winner.name .. " mit " .. bestHand.name)
+            local bonus = (index <= remainder) and 1 or 0
+            winner.chips = winner.chips + winAmount + bonus
+            runtime.info("Gewinner:", winner.name, "mit", bestHand.name)
         end
 
         -- Benachrichtige alle
@@ -684,7 +851,7 @@ endHand = function()
     sleep(config.showdownDelay)
 
     -- IMMER zurück zur Lobby nach einer Runde
-    print("Runde beendet - zurueck zur Lobby")
+    runtime.info("Runde beendet - zurueck zur Lobby")
 
     -- Sende GAME_END an alle
     for _, player in ipairs(game.players) do
@@ -784,28 +951,42 @@ end
 
 -- Hauptschleife
 local function main()
-    print("=== Poker Server ===")
-    print("Initialisiere Netzwerk...")
+    runtime.info("=== Poker Server ===")
+    runtime.info("Initialisiere Netzwerk...")
 
     network.init(true)
-    print("Server gestartet!")
-    print("Warte auf Spieler...")
+    runtime.info("Server gestartet!")
+    runtime.info("Warte auf Spieler...")
 
     while true do
         local senderId, msgType, data = network.receive(1)
 
         if senderId and msgType then
+            local payload = data or {}
+
             if msgType == network.MSG.JOIN then
-                addPlayer(senderId, data.playerName, data.chips)
+                if type(payload.playerName) ~= "string" or payload.playerName == "" then
+                    runtime.warn("Ungültiger JOIN ohne Namen von", senderId)
+                else
+                    addPlayer(senderId, payload.playerName, payload.chips)
+                end
 
             elseif msgType == network.MSG.READY then
-                setPlayerReady(senderId, data.ready)
+                setPlayerReady(senderId, payload.ready)
 
             elseif msgType == network.MSG.LEAVE then
                 removePlayer(senderId)
 
             elseif msgType == network.MSG.PING then
                 network.send(senderId, network.MSG.PONG, {})
+            elseif msgType == network.MSG.HEARTBEAT then
+                network.send(senderId, network.MSG.PONG, {})
+                local heartbeatPlayer = getPlayer(senderId)
+                if heartbeatPlayer then
+                    heartbeatPlayer.connected = true
+                end
+            else
+                runtime.debug(config.debug, "Ignoriere unbekannte Nachricht", msgType, "von", senderId)
             end
         end
     end
@@ -816,16 +997,16 @@ while true do
     local success, err = pcall(main)
 
     if not success then
-        print("===================")
-        print("FEHLER: " .. tostring(err))
-        print("===================")
-        print("Automatischer Neustart in " .. config.errorRebootDelay .. " Sekunden...")
+        runtime.error("===================")
+        runtime.error("FEHLER:", tostring(err))
+        runtime.error("===================")
+        runtime.warn("Automatischer Neustart in " .. config.errorRebootDelay .. " Sekunden...")
         network.close()
 
         -- Wartezeit vor Neustart
         sleep(config.errorRebootDelay)
 
-        print("Neustart...")
+        runtime.info("Neustart...")
         os.reboot()
     else
         break
