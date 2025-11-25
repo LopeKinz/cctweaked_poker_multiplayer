@@ -9,7 +9,13 @@ local config = {
     smallBlind = 10,
     bigBlind = 20,
     startingChips = 1000,
-    turnTimeout = 60
+    turnTimeout = 60,
+    -- Timing Constants
+    gameStartDelay = 0.5,    -- Delay before game starts
+    roundTransitionDelay = 2, -- Delay between rounds (flop/turn/river)
+    showdownDelay = 5,        -- Delay after showdown
+    errorRebootDelay = 30,    -- Delay before auto-reboot on error
+    debug = false             -- Debug output
 }
 
 -- Spielleiter (erster Spieler der beitritt)
@@ -18,6 +24,7 @@ local gameMaster = nil
 -- Spielstatus
 local game = {
     players = {},
+    playerMap = {},  -- Hash map für schnellen Zugriff: id -> player
     activePlayers = {},
     deck = {},
     communityCards = {},
@@ -71,6 +78,7 @@ local function addPlayer(clientId, playerName, initialChips)
     }
 
     table.insert(game.players, player)
+    game.playerMap[clientId] = player  -- Add to hash map for O(1) lookup
 
     -- Erster NICHT-Zuschauer wird Spielleiter
     -- Zuschauer (Name beginnt mit "Zuschauer_") können kein Spielleiter sein
@@ -154,6 +162,7 @@ local function removePlayer(clientId)
 
     -- Entferne Spieler
     table.remove(game.players, playerIndex)
+    game.playerMap[clientId] = nil  -- Remove from hash map
     print("Spieler " .. playerData.name .. " hat verlassen")
 
     -- KRITISCH: Auch aus activePlayers entfernen falls Spiel läuft
@@ -225,14 +234,9 @@ local function removePlayer(clientId)
     return true
 end
 
--- Findet Spieler nach ID
+-- Findet Spieler nach ID (O(1) mit Hash Map)
 local function getPlayer(clientId)
-    for _, player in ipairs(game.players) do
-        if player.id == clientId then
-            return player
-        end
-    end
-    return nil
+    return game.playerMap[clientId]
 end
 
 -- Setzt Spieler als bereit (nur Spielleiter darf starten)
@@ -325,7 +329,7 @@ startGame = function()
     end
 
     -- Kurze Pause damit alle Clients GAME_START verarbeiten können
-    sleep(0.5)
+    sleep(config.gameStartDelay)
 
     -- Setze ersten Spieler am Zug (nach Big Blind)
     game.currentPlayerIndex = ((game.dealerIndex + 2) % #game.activePlayers) + 1
@@ -334,7 +338,7 @@ startGame = function()
     broadcastGameState()
 
     -- Kurze Pause damit GAME_STATE beim Client ankommt
-    sleep(0.5)
+    sleep(config.gameStartDelay)
 
     -- Starte erste Wettrunde
     startBettingRound()
@@ -357,8 +361,11 @@ end
 -- Startet Wettrunde
 startBettingRound = function()
     print("=== Wettrunde: " .. game.round .. " ===")
-    print("DEBUG: activePlayers count = " .. #game.activePlayers)
-    print("DEBUG: currentPlayerIndex = " .. game.currentPlayerIndex)
+
+    if config.debug then
+        print("DEBUG: activePlayers count = " .. #game.activePlayers)
+        print("DEBUG: currentPlayerIndex = " .. game.currentPlayerIndex)
+    end
 
     -- SICHERHEIT: Prüfe ob activePlayers leer ist
     if not game.activePlayers or #game.activePlayers == 0 then
@@ -382,8 +389,10 @@ startBettingRound = function()
         return
     end
 
-    print("DEBUG: Sende YOUR_TURN an Spieler: " .. currentPlayer.name .. " (ID: " .. currentPlayer.id .. ")")
-    print("DEBUG: currentBet=" .. game.currentBet .. ", canCheck=" .. tostring(currentPlayer.bet >= game.currentBet))
+    if config.debug then
+        print("DEBUG: Sende YOUR_TURN an Spieler: " .. currentPlayer.name .. " (ID: " .. currentPlayer.id .. ")")
+        print("DEBUG: currentBet=" .. game.currentBet .. ", canCheck=" .. tostring(currentPlayer.bet >= game.currentBet))
+    end
 
     network.send(currentPlayer.id, network.MSG.YOUR_TURN, {
         currentBet = game.currentBet,
@@ -391,7 +400,9 @@ startBettingRound = function()
         canCheck = currentPlayer.bet >= game.currentBet
     })
 
-    print("DEBUG: YOUR_TURN gesendet!")
+    if config.debug then
+        print("DEBUG: YOUR_TURN gesendet!")
+    end
 
     -- Starte Timer
     local timeoutTimer = os.startTimer(config.turnTimeout)
@@ -423,18 +434,58 @@ end
 -- Verarbeitet Spieler-Aktion
 handlePlayerAction = function(clientId, action, amount)
     local player = getPlayer(clientId)
-    if not player then return end
+    if not player then
+        print("FEHLER: Spieler nicht gefunden: " .. tostring(clientId))
+        return
+    end
 
-    print(player.name .. " -> " .. action .. " (" .. amount .. ")")
+    -- INPUT VALIDATION
+    if not action or type(action) ~= "string" then
+        print("FEHLER: Ungültige Aktion von " .. player.name)
+        return
+    end
+
+    -- Validate amount for raise
+    if action == "raise" then
+        if not amount or type(amount) ~= "number" or amount < 0 then
+            print("FEHLER: Ungültiger Raise-Betrag von " .. player.name .. ": " .. tostring(amount))
+            network.send(clientId, network.MSG.ERROR, {message = "Ungültiger Raise-Betrag"})
+            return
+        end
+
+        -- Validate minimum raise
+        local minRaise = config.bigBlind
+        if amount < minRaise then
+            print("FEHLER: Raise-Betrag zu klein: " .. amount .. " < " .. minRaise)
+            network.send(clientId, network.MSG.ERROR, {message = "Raise-Betrag zu klein (min: " .. minRaise .. ")"})
+            return
+        end
+
+        -- Validate maximum raise (can't raise more than you have)
+        local raiseAmount = game.currentBet - player.bet + amount
+        if raiseAmount > player.chips then
+            print("FEHLER: Raise-Betrag zu groß: " .. raiseAmount .. " > " .. player.chips)
+            network.send(clientId, network.MSG.ERROR, {message = "Nicht genug Chips"})
+            return
+        end
+    end
+
+    print(player.name .. " -> " .. action .. " (" .. (amount or 0) .. ")")
 
     if action == "fold" then
         player.folded = true
 
     elseif action == "check" then
-        -- Nichts tun
+        -- Validate check is allowed
+        if player.bet < game.currentBet then
+            print("FEHLER: Check nicht erlaubt - muss callen")
+            network.send(clientId, network.MSG.ERROR, {message = "Check nicht erlaubt - muss callen"})
+            return
+        end
 
     elseif action == "call" then
         local callAmount = game.currentBet - player.bet
+        if callAmount < 0 then callAmount = 0 end
         placeBet(player, callAmount)
 
     elseif action == "raise" then
@@ -444,10 +495,17 @@ handlePlayerAction = function(clientId, action, amount)
 
     elseif action == "all-in" then
         local allInAmount = player.chips
+        if allInAmount <= 0 then
+            print("FEHLER: Keine Chips für All-In")
+            return
+        end
         placeBet(player, allInAmount)
         if player.bet > game.currentBet then
             game.currentBet = player.bet
         end
+    else
+        print("FEHLER: Unbekannte Aktion: " .. tostring(action))
+        return
     end
 
     game.roundBets[player.id] = player.bet
@@ -531,7 +589,7 @@ endBettingRound = function()
         table.insert(game.communityCards, poker.drawCard(game.deck))
         table.insert(game.communityCards, poker.drawCard(game.deck))
         broadcastGameState()
-        sleep(2)
+        sleep(config.roundTransitionDelay)
         game.currentPlayerIndex = game.dealerIndex
         nextPlayer()
 
@@ -539,7 +597,7 @@ endBettingRound = function()
         game.round = "turn"
         table.insert(game.communityCards, poker.drawCard(game.deck))
         broadcastGameState()
-        sleep(2)
+        sleep(config.roundTransitionDelay)
         game.currentPlayerIndex = game.dealerIndex
         nextPlayer()
 
@@ -547,7 +605,7 @@ endBettingRound = function()
         game.round = "river"
         table.insert(game.communityCards, poker.drawCard(game.deck))
         broadcastGameState()
-        sleep(2)
+        sleep(config.roundTransitionDelay)
         game.currentPlayerIndex = game.dealerIndex
         nextPlayer()
 
@@ -622,8 +680,8 @@ endHand = function()
         end
     end
 
-    -- Warte kurz
-    sleep(5)
+    -- Warte kurz damit Spieler Ergebnis sehen können
+    sleep(config.showdownDelay)
 
     -- IMMER zurück zur Lobby nach einer Runde
     print("Runde beendet - zurueck zur Lobby")
@@ -675,13 +733,22 @@ broadcastGameState = function()
         bigBlindIndex = activeIndexToPlayerIndex(bbActiveIndex)
     end
 
+    -- SICHERHEIT: nil checks für Index-Konvertierung
+    local dealerIdx = nil
+    local currentIdx = nil
+
+    if game.round ~= "waiting" and #game.activePlayers > 0 then
+        dealerIdx = activeIndexToPlayerIndex(game.dealerIndex)
+        currentIdx = activeIndexToPlayerIndex(game.currentPlayerIndex)
+    end
+
     local state = {
         round = game.round,
         pot = game.pot,
         currentBet = game.currentBet,
         communityCards = game.communityCards,
-        dealerIndex = activeIndexToPlayerIndex(game.dealerIndex),
-        currentPlayerIndex = activeIndexToPlayerIndex(game.currentPlayerIndex),
+        dealerIndex = dealerIdx,
+        currentPlayerIndex = currentIdx,
         smallBlindIndex = smallBlindIndex,
         bigBlindIndex = bigBlindIndex,
         gameMaster = gameMaster,
@@ -752,11 +819,11 @@ while true do
         print("===================")
         print("FEHLER: " .. tostring(err))
         print("===================")
-        print("Automatischer Neustart in 30 Sekunden...")
+        print("Automatischer Neustart in " .. config.errorRebootDelay .. " Sekunden...")
         network.close()
 
-        -- 30 Sekunden Wartezeit
-        sleep(30)
+        -- Wartezeit vor Neustart
+        sleep(config.errorRebootDelay)
 
         print("Neustart...")
         os.reboot()
