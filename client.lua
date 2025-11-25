@@ -2,6 +2,7 @@
 local poker = require("lib.poker")
 local network = require("lib.network")
 local ui = require("lib.ui")
+local bank = require("lib.bank")
 
 -- Konfiguration
 local config = {
@@ -9,6 +10,7 @@ local config = {
     chestSide = "front",
     rsBridgeSide = "right",
     useBank = false,
+    chipItem = "minecraft:diamond",  -- 1 Diamant = 1 Chip
     serverTimeout = 10,
     turnTimeout = 60  -- Sekunden für Spieler-Turn
 }
@@ -33,6 +35,7 @@ local client = {
     chest = nil,
     playerDetector = nil,
     rsbridge = nil,
+    bankManager = nil,  -- Bank-Manager wenn useBank = true
     connected = false,
     ready = false,
     myPosition = nil,  -- Position am Tisch (1-4)
@@ -72,32 +75,85 @@ local function findPeripherals()
         print("WARNUNG: Kein Player Detector gefunden!")
     end
 
-    -- RS Bridge (optional)
+    -- RS Bridge und Bank-System (optional)
     if config.useBank then
         client.rsbridge = peripheral.find("rs_bridge") or
                          peripheral.wrap(config.rsBridgeSide)
-        if client.rsbridge then
+        if client.rsbridge and client.chest then
             print("RS Bridge gefunden")
+
+            -- Initialisiere Bank-Manager
+            client.bankManager = bank.createManager(config.rsBridgeSide, config.chestSide)
+
+            if client.bankManager then
+                print("Bank-System aktiviert!")
+                print("Chip-Item: " .. (client.bankManager.chipItem or config.chipItem))
+
+                -- Setze Chip-Item falls nicht auto-erkannt
+                if not client.bankManager.chipItem then
+                    client.bankManager.chipItem = config.chipItem
+                end
+            else
+                print("WARNUNG: Bank-Manager konnte nicht erstellt werden")
+                config.useBank = false
+            end
         else
-            print("WARNUNG: RS Bridge nicht gefunden (Bank deaktiviert)")
+            print("WARNUNG: RS Bridge oder Truhe nicht gefunden (Bank deaktiviert)")
             config.useBank = false
         end
     end
 end
 
--- Zählt Chips in Truhe
+-- Zählt Chips in Truhe (oder ME System wenn useBank = true)
 local function countChips()
-    if not client.chest then return 0 end
+    if config.useBank and client.bankManager then
+        -- Zähle aus ME System + Truhe
+        local meBalance = client.bankManager:getBalance()
+        local chestChips = 0
 
-    local total = 0
-    for slot = 1, client.chest.size() do
-        local item = client.chest.getItemDetail(slot)
-        if item then
-            total = total + item.count
+        if client.chest then
+            for slot = 1, client.chest.size() do
+                local item = client.chest.getItemDetail(slot)
+                if item and item.name == config.chipItem then
+                    chestChips = chestChips + item.count
+                end
+            end
         end
+
+        return meBalance + chestChips
+    else
+        -- Standard: Zähle nur in Truhe
+        if not client.chest then return 0 end
+
+        local total = 0
+        for slot = 1, client.chest.size() do
+            local item = client.chest.getItemDetail(slot)
+            if item then
+                total = total + item.count
+            end
+        end
+
+        return total
+    end
+end
+
+-- Synchronisiert Chips mit Bank-System
+local function syncChipsWithBank(targetChips)
+    if not config.useBank or not client.bankManager then
+        return
     end
 
-    return total
+    print("Synchronisiere Chips mit Bank...")
+    print("Ziel: " .. targetChips .. " Chips")
+
+    -- Synchronisiere
+    local success, result = client.bankManager:sync(targetChips)
+
+    if success then
+        print("Chips synchronisiert: " .. (result or 0) .. " transferiert")
+    else
+        print("WARNUNG: Chip-Sync fehlgeschlagen: " .. tostring(result))
+    end
 end
 
 -- Erkennt Spieler
@@ -570,6 +626,16 @@ local function handleGameState(state)
         client.myCards = state.myCards
     end
 
+    -- Synchronisiere Chips mit Bank wenn nötig
+    if config.useBank and client.playerId then
+        for _, player in ipairs(state.players) do
+            if player.id == client.playerId then
+                syncChipsWithBank(player.chips)
+                break
+            end
+        end
+    end
+
     if state.round == "waiting" then
         drawLobby()
     else
@@ -636,6 +702,16 @@ local function handleRoundEnd(data)
 
     client.ui:showMessage(message, 5, ui.COLORS.BTN_CALL, true)
 
+    -- Synchronisiere Chips nach Runde
+    if config.useBank and client.playerId and client.gameState then
+        for _, player in ipairs(client.gameState.players) do
+            if player.id == client.playerId then
+                syncChipsWithBank(player.chips)
+                break
+            end
+        end
+    end
+
     client.ready = false
     client.ui:clearButtons()
 end
@@ -688,6 +764,17 @@ local function handleEvents()
                     client.ui:stopTimer()
                     client.ui:clearButtons()
                     client.myCards = {}
+
+                    -- Synchronisiere finale Chips mit Bank
+                    if config.useBank and client.playerId and client.gameState then
+                        for _, player in ipairs(client.gameState.players) do
+                            if player.id == client.playerId then
+                                syncChipsWithBank(player.chips)
+                                break
+                            end
+                        end
+                    end
+
                     -- Warte kurz damit GAME_STATE ankommt
                     sleep(0.5)
                     if client.gameState and client.gameState.round == "waiting" then
