@@ -103,17 +103,33 @@ end
 function ui:calculatePlayerPositions()
     local positions = {}
 
-    -- Position 1: Links
-    positions[1] = {x = 3, y = math.floor(self.height / 2) - 5, side = "left"}
+    -- Position 1: Links (mit Bounds-Check)
+    positions[1] = {
+        x = math.max(1, 3),
+        y = math.max(1, math.floor(self.height / 2) - 5),
+        side = "left"
+    }
 
-    -- Position 2: Oben
-    positions[2] = {x = math.floor(self.width / 2) - 12, y = 3, side = "top"}
+    -- Position 2: Oben (mit Bounds-Check)
+    positions[2] = {
+        x = math.max(1, math.floor(self.width / 2) - 12),
+        y = 3,
+        side = "top"
+    }
 
-    -- Position 3: Rechts
-    positions[3] = {x = self.width - 25, y = math.floor(self.height / 2) - 5, side = "right"}
+    -- Position 3: Rechts (mit Bounds-Check)
+    positions[3] = {
+        x = math.max(1, self.width - 25),
+        y = math.max(1, math.floor(self.height / 2) - 5),
+        side = "right"
+    }
 
-    -- Position 4: Unten/Eigen (eigene Position)
-    positions[4] = {x = math.floor(self.width / 2) - 8, y = self.height - 12, side = "bottom"}
+    -- Position 4: Unten/Eigen (mit Bounds-Check)
+    positions[4] = {
+        x = math.max(1, math.floor(self.width / 2) - 8),
+        y = math.max(1, self.height - 12),
+        side = "bottom"
+    }
 
     return positions
 end
@@ -294,8 +310,10 @@ function ui:drawCommunityCards(cards, round)
 
     -- Untergrund für Community Cards (Poker-Tisch Bereich)
     local bgPadding = 3
-    self:drawBox(startX - bgPadding, startY - 1, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.PANEL_DARK)
-    self:drawBorder(startX - bgPadding, startY - 1, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.TABLE_BORDER)
+    local bgX = math.max(1, startX - bgPadding)
+    local bgY = math.max(1, startY - 1)
+    self:drawBox(bgX, bgY, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.PANEL_DARK)
+    self:drawBorder(bgX, bgY, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.TABLE_BORDER)
 
     -- Zeichne 5 Karten
     for i = 1, 5 do
@@ -367,7 +385,8 @@ function ui:drawPlayerBox(position, player, isDealer, isSmallBlind, isBigBlind, 
     -- Name mit Style
     local name = player.name or "Player"
     if #name > width - 6 then
-        name = name:sub(1, width - 9) .. "..."
+        local maxLen = math.max(1, width - 9)
+        name = name:sub(1, maxLen) .. "..."
     end
     local nameColor = isMe and ui.COLORS.TEXT_GOLD or ui.COLORS.TEXT_WHITE
     self:drawText(x + 2, y + 1, name, nameColor, bgColor)
@@ -479,20 +498,15 @@ function ui:drawButton(x, y, width, height, text, color, textColor, enabled)
     self:drawBox(x, y, width, height, btnColor)
     self:drawBorder(x, y, width, height, ui.COLORS.BTN_BORDER)
 
-    -- Highlight oben für 3D-Look
+    -- Highlight oben für 3D-Look (nur bei enabled und ausreichender Höhe)
     if enabled and height > 2 then
         self:drawBox(x + 1, y + 1, width - 2, 1, ui.COLORS.PANEL_LIGHT)
-
-        -- Text mit Offset für 3D
-        local textX = x + math.floor((width - #text) / 2)
-        local textY = y + math.floor(height / 2)
-        self:drawText(textX, textY, text, txtColor, btnColor)
-    else
-        -- Normal zentriert
-        local textX = x + math.floor((width - #text) / 2)
-        local textY = y + math.floor(height / 2)
-        self:drawText(textX, textY, text, txtColor, btnColor)
     end
+
+    -- Text zentrieren
+    local textX = x + math.floor((width - #text) / 2)
+    local textY = y + math.floor(height / 2)
+    self:drawText(textX, textY, text, txtColor, btnColor)
 end
 
 function ui:addButton(id, x, y, width, height, text, callback, color, enabled)
@@ -538,6 +552,11 @@ end
 -- === RAISE BUTTONS (VERBESSERT) ===
 
 function ui:drawRaiseButtons(min, max, current, pot, x, y, width)
+    -- Nil-Checks für Parameter
+    min = min or 0
+    max = max or 0
+    current = current or 0
+    pot = pot or 0
     x = x or 5
     y = y or self.height - 12
     width = width or self.width - 10
@@ -751,6 +770,9 @@ end
 -- === PLAYER SELECTION (MODERN) ===
 
 function ui:showPlayerSelection(players)
+    -- Nil-Check für players
+    players = players or {}
+
     local dialogHeight = math.min(#players * 3 + 14, self.height - 4)
     local y = math.floor((self.height - dialogHeight) / 2)
     local width = math.min(44, self.width - 8)
@@ -813,6 +835,11 @@ end
 -- === RAISE INPUT (PREMIUM) ===
 
 function ui:showRaiseInput(min, max, pot)
+    -- Nil-Checks für Parameter
+    min = min or 0
+    max = max or 0
+    pot = pot or 0
+
     local dialogHeight = 18
     local y = math.floor(self.height / 2) - 9
     local width = self.width - 8
