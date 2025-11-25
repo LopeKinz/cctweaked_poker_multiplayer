@@ -24,7 +24,11 @@ local CMD = {
     REBOOT = "REBOOT",
     STATUS = "STATUS",
     STATUS_RESPONSE = "STATUS_RESPONSE",
-    UPDATE = "UPDATE"
+    UPDATE = "UPDATE",
+    CONFIG_SET = "CONFIG_SET",
+    CONFIG_GET = "CONFIG_GET",
+    CONFIG_RESPONSE = "CONFIG_RESPONSE",
+    RESET_TO_LOBBY = "RESET_TO_LOBBY"
 }
 
 -- Computer-Liste
@@ -146,8 +150,10 @@ local function showMenu()
     printColor("4. Stop - Stoppe alle Programme", colors.white)
     printColor("5. Reboot - Starte alle Computer neu", colors.white)
     printColor("6. Update - Update alle Computer", colors.white)
-    printColor("7. Custom - Einzelnen Computer steuern", colors.white)
-    printColor("8. Beenden", colors.white)
+    printColor("7. Config - Konfiguration setzen (alle)", colors.white)
+    printColor("8. Lobby - Zurueck zur Lobby (alle Clients)", colors.white)
+    printColor("9. Custom - Einzelnen Computer steuern", colors.white)
+    printColor("0. Beenden", colors.white)
     print("")
 end
 
@@ -213,6 +219,68 @@ local function updateAll()
     -- Lösche Computer-Liste (da alle neu starten)
     computers = {}
     printColor("Update-Prozess gestartet. Führe 'Scan' aus um Status zu prüfen.", colors.yellow)
+end
+
+-- Konfiguration setzen
+local function setConfig()
+    term.clear()
+    term.setCursorPos(1, 1)
+    printColor("=== KONFIGURATION SETZEN ===", colors.yellow)
+    print("")
+    printColor("Setzt Konfiguration auf ALLEN Computern!", colors.lightGray)
+    print("")
+
+    write("Config-Key (z.B. 'chestSide'): ")
+    local key = read()
+
+    if key == "" then
+        printColor("Abgebrochen.", colors.yellow)
+        sleep(1)
+        return
+    end
+
+    write("Wert: ")
+    local value = read()
+
+    if value == "" then
+        printColor("Abgebrochen.", colors.yellow)
+        sleep(1)
+        return
+    end
+
+    -- Versuche Wert zu konvertieren
+    if value == "true" then
+        value = true
+    elseif value == "false" then
+        value = false
+    elseif tonumber(value) then
+        value = tonumber(value)
+    end
+
+    print("")
+    printColor("Sende CONFIG_SET an alle Computer...", colors.yellow)
+    printColor("  Key: " .. key, colors.lightGray)
+    printColor("  Value: " .. tostring(value), colors.lightGray)
+    print("")
+
+    rednet.broadcast({
+        type = CMD.CONFIG_SET,
+        data = {key = key, value = value}
+    }, PROTOCOL)
+
+    sleep(1)
+    printColor("Konfiguration gesendet!", colors.green)
+    sleep(2)
+end
+
+-- Zurück zur Lobby
+local function resetToLobby()
+    printColor("Sende alle Clients zurueck zur Lobby...", colors.yellow)
+    rednet.broadcast({type = CMD.RESET_TO_LOBBY}, PROTOCOL)
+
+    sleep(1)
+    printColor("Befehl gesendet!", colors.green)
+    sleep(2)
 end
 
 -- Custom Steuerung
@@ -307,9 +375,15 @@ local function main()
             updateAll()
 
         elseif choice == "7" then
-            customControl()
+            setConfig()
 
         elseif choice == "8" then
+            resetToLobby()
+
+        elseif choice == "9" then
+            customControl()
+
+        elseif choice == "0" then
             term.clear()
             term.setCursorPos(1, 1)
             printColor("Steuerung beendet.", colors.green)

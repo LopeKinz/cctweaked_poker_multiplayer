@@ -11,7 +11,11 @@ local CMD = {
     REBOOT = "REBOOT",
     STATUS = "STATUS",
     STATUS_RESPONSE = "STATUS_RESPONSE",
-    UPDATE = "UPDATE"
+    UPDATE = "UPDATE",
+    CONFIG_SET = "CONFIG_SET",
+    CONFIG_GET = "CONFIG_GET",
+    CONFIG_RESPONSE = "CONFIG_RESPONSE",
+    RESET_TO_LOBBY = "RESET_TO_LOBBY"
 }
 
 -- Ermittelt Computer-Typ basierend auf Hardware und Konfiguration
@@ -60,6 +64,47 @@ local function initNetwork()
 
     rednet.open(peripheral.getName(modem))
     return true
+end
+
+-- Config-Management
+local function loadConfig()
+    if not fs.exists("config.lua") then
+        return {}
+    end
+
+    local config = {}
+    local success, result = pcall(dofile, "config.lua")
+    if success and type(result) == "table" then
+        config = result
+    end
+    return config
+end
+
+local function saveConfig(config)
+    local file = fs.open("config.lua", "w")
+    file.write("-- Auto-generated config\n")
+    file.write("return {\n")
+    for k, v in pairs(config) do
+        if type(v) == "string" then
+            file.write("    " .. k .. ' = "' .. v .. '",\n')
+        elseif type(v) == "number" or type(v) == "boolean" then
+            file.write("    " .. k .. " = " .. tostring(v) .. ",\n")
+        end
+    end
+    file.write("}\n")
+    file.close()
+end
+
+local function setConfig(key, value)
+    local config = loadConfig()
+    config[key] = value
+    saveConfig(config)
+    print("[Config] " .. key .. " = " .. tostring(value))
+end
+
+local function getConfig(key)
+    local config = loadConfig()
+    return config[key]
 end
 
 -- Startet Programm
@@ -261,6 +306,33 @@ local function main()
                     label = computerLabel,
                     online = true
                 }, PROTOCOL)
+
+            elseif cmd == CMD.CONFIG_SET then
+                -- Konfiguration setzen
+                print("[" .. os.date("%H:%M:%S") .. "] CONFIG_SET von #" .. senderId)
+                if message.data and message.data.key and message.data.value then
+                    setConfig(message.data.key, message.data.value)
+                end
+
+            elseif cmd == CMD.CONFIG_GET then
+                -- Konfiguration abrufen
+                print("[" .. os.date("%H:%M:%S") .. "] CONFIG_GET von #" .. senderId)
+                local key = message.data and message.data.key
+                local value = key and getConfig(key)
+                rednet.send(senderId, {
+                    type = CMD.CONFIG_RESPONSE,
+                    key = key,
+                    value = value
+                }, PROTOCOL)
+
+            elseif cmd == CMD.RESET_TO_LOBBY then
+                -- Zurück zur Lobby (nur für Clients)
+                print("[" .. os.date("%H:%M:%S") .. "] RESET_TO_LOBBY von #" .. senderId)
+                if computerType == "client" then
+                    stopProgram()
+                    sleep(0.5)
+                    startProgram()
+                end
             end
         end
     end

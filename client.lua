@@ -682,6 +682,18 @@ local function handleEvents()
                         drawLobby()
                     end
 
+                elseif msgType == network.MSG.GAME_END then
+                    -- Spiel beendet - zurück zur Lobby
+                    print("Spiel beendet - zurueck zur Lobby")
+                    client.ui:stopTimer()
+                    client.ui:clearButtons()
+                    client.myCards = {}
+                    -- Warte kurz damit GAME_STATE ankommt
+                    sleep(0.5)
+                    if client.gameState and client.gameState.round == "waiting" then
+                        drawLobby()
+                    end
+
                 elseif msgType == network.MSG.ERROR then
                     client.ui:showMessage("FEHLER: " .. data.message, 3, ui.COLORS.BTN_FOLD)
                     if client.gameState then
