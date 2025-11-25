@@ -357,6 +357,8 @@ end
 -- Startet Wettrunde
 startBettingRound = function()
     print("=== Wettrunde: " .. game.round .. " ===")
+    print("DEBUG: activePlayers count = " .. #game.activePlayers)
+    print("DEBUG: currentPlayerIndex = " .. game.currentPlayerIndex)
 
     -- SICHERHEIT: Prüfe ob activePlayers leer ist
     if not game.activePlayers or #game.activePlayers == 0 then
@@ -380,11 +382,16 @@ startBettingRound = function()
         return
     end
 
+    print("DEBUG: Sende YOUR_TURN an Spieler: " .. currentPlayer.name .. " (ID: " .. currentPlayer.id .. ")")
+    print("DEBUG: currentBet=" .. game.currentBet .. ", canCheck=" .. tostring(currentPlayer.bet >= game.currentBet))
+
     network.send(currentPlayer.id, network.MSG.YOUR_TURN, {
         currentBet = game.currentBet,
         minRaise = config.bigBlind,
         canCheck = currentPlayer.bet >= game.currentBet
     })
+
+    print("DEBUG: YOUR_TURN gesendet!")
 
     -- Starte Timer
     local timeoutTimer = os.startTimer(config.turnTimeout)

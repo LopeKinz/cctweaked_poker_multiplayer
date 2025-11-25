@@ -638,37 +638,53 @@ end
 
 -- Behandelt Spielstatus-Update
 local function handleGameState(state)
+    print("DEBUG: handleGameState() aufgerufen, round=" .. (state.round or "nil"))
     client.gameState = state
 
     if state.myCards then
         client.myCards = state.myCards
     end
 
-    -- LIVE Chip-Sync: Verluste gehen SOFORT ins ME, Gewinne kommen SOFORT aus ME
-    if config.useBank and client.playerId then
-        for _, player in ipairs(state.players) do
-            if player.id == client.playerId then
-                syncChipsWithBank(player.chips)
-                break
-            end
-        end
-    end
-
+    -- Zeichne ZUERST, damit UI schnell aktualisiert wird
     if state.round == "waiting" then
         drawLobby()
     else
         drawPokerTable()
     end
+
+    -- DANN Chip-Sync im Hintergrund (nicht blockierend für Event-Loop)
+    -- Nur syncen wenn nicht im Turn (sonst würden Buttons überschrieben)
+    if config.useBank and client.playerId and state.currentPlayerIndex then
+        local isMyTurn = false
+        for i, player in ipairs(state.players) do
+            if player.id == client.playerId and i == state.currentPlayerIndex then
+                isMyTurn = true
+                break
+            end
+        end
+
+        -- Nur syncen wenn NICHT am Zug (sonst kommen Buttons nicht an)
+        if not isMyTurn then
+            for _, player in ipairs(state.players) do
+                if player.id == client.playerId then
+                    syncChipsWithBank(player.chips)
+                    break
+                end
+            end
+        end
+    end
 end
 
 -- Behandelt "Your Turn"
 local function handleYourTurn(data)
+    print("DEBUG: handleYourTurn() aufgerufen!")
+    print("DEBUG: canCheck=" .. tostring(data.canCheck) .. ", currentBet=" .. tostring(data.currentBet))
+
     -- Zuschauer bekommen keinen Turn
     if client.isSpectator then
+        print("DEBUG: Bin Zuschauer, keine Buttons")
         return
     end
-
-    client.ui:showMessage("DU BIST DRAN!", 1, ui.COLORS.ACTIVE)
 
     -- Finde eigene Spieler-Daten
     local myPlayer = nil
@@ -679,19 +695,36 @@ local function handleYourTurn(data)
         end
     end
 
-    if myPlayer then
-        drawPokerTable()
-        drawActionButtons(
-            data.canCheck,
-            data.currentBet,
-            myPlayer.bet,
-            myPlayer.chips,
-            data.minRaise
-        )
-
-        -- Starte Timer
-        client.ui:startTimer(config.turnTimeout or 60)
+    if not myPlayer then
+        print("DEBUG: FEHLER - myPlayer nicht gefunden!")
+        return
     end
+
+    print("DEBUG: myPlayer gefunden: chips=" .. myPlayer.chips .. ", bet=" .. myPlayer.bet)
+
+    -- Sync Chips JETZT (wenn am Zug)
+    if config.useBank then
+        syncChipsWithBank(myPlayer.chips)
+    end
+
+    -- Zeige kurz Nachricht
+    client.ui:showMessage("DU BIST DRAN!", 1, ui.COLORS.ACTIVE)
+
+    -- Zeichne Tisch und Buttons
+    drawPokerTable()
+
+    print("DEBUG: Zeichne Action-Buttons...")
+    drawActionButtons(
+        data.canCheck,
+        data.currentBet,
+        myPlayer.bet,
+        myPlayer.chips,
+        data.minRaise
+    )
+    print("DEBUG: Action-Buttons gezeichnet!")
+
+    -- Starte Timer
+    client.ui:startTimer(config.turnTimeout or 60)
 end
 
 -- Behandelt Runden-Ende
