@@ -31,38 +31,18 @@ end
 function bank.getItemDetails(bridge, itemName)
     if not bridge then return nil end
 
-    -- Prüfe ob Methoden existieren
-    if not bridge.listItems and not bridge.getItem then
-        print("FEHLER: Keine gültige ME-Methode gefunden!")
+    -- Nur getItem verwenden (KEIN listItems!)
+    if not bridge.getItem then
+        print("FEHLER: RS Bridge hat keine getItem() Methode!")
         return nil
     end
 
-    -- Versuche getItem() direkt wenn verfügbar
-    if bridge.getItem then
-        local success, item = pcall(function()
-            return bridge.getItem(itemName)
-        end)
+    local success, item = pcall(function()
+        return bridge.getItem({name = itemName})
+    end)
 
-        if success and item then
-            return item
-        end
-    end
-
-    -- Fallback: listItems()
-    if bridge.listItems then
-        local success, items = pcall(function()
-            return bridge.listItems()
-        end)
-
-        if success and items then
-            for _, item in pairs(items) do
-                if item.name == itemName or
-                   item.displayName == itemName or
-                   (item.fingerprint and item.fingerprint:find(itemName)) then
-                    return item
-                end
-            end
-        end
+    if success and item then
+        return item
     end
 
     return nil
@@ -72,52 +52,26 @@ end
 function bank.getBalance(bridge, itemFilter)
     if not bridge then return 0 end
 
-    -- Prüfe ob listItems Methode existiert
-    if not bridge.listItems then
-        print("FEHLER: RS Bridge hat keine listItems() Methode!")
-        print("Verwende getItem() stattdessen...")
-
-        -- Fallback: Versuche getItem mit Filter
-        if itemFilter and bridge.getItem then
-            local success, item = pcall(function()
-                return bridge.getItem(itemFilter)
-            end)
-
-            if success and item and item.amount then
-                return item.amount
-            end
-        end
-
+    if not itemFilter then
+        print("FEHLER: Kein Item-Filter angegeben!")
         return 0
     end
 
-    -- Versuche listItems() aufzurufen
-    local success, items = pcall(function()
-        return bridge.listItems()
+    -- Verwende NUR getItem() - KEIN listItems()
+    if not bridge.getItem then
+        print("FEHLER: RS Bridge hat keine getItem() Methode!")
+        return 0
+    end
+
+    local success, item = pcall(function()
+        return bridge.getItem({name = itemFilter})
     end)
 
-    if not success or not items then
-        print("FEHLER: listItems() fehlgeschlagen: " .. tostring(items))
-        return 0
+    if success and item and item.amount then
+        return item.amount
     end
 
-    local total = 0
-
-    if itemFilter then
-        -- Spezifisches Item zählen
-        for _, item in pairs(items) do
-            if item.name == itemFilter or item.displayName == itemFilter then
-                total = total + (item.amount or 0)
-            end
-        end
-    else
-        -- Alle Items als Chips zählen (fallback)
-        for _, item in pairs(items) do
-            total = total + (item.amount or 0)
-        end
-    end
-
-    return total
+    return 0
 end
 
 -- Exportiert Items aus ME System in Truhe
