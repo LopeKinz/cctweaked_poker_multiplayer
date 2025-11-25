@@ -31,14 +31,37 @@ end
 function bank.getItemDetails(bridge, itemName)
     if not bridge then return nil end
 
-    local items = bridge.listItems()
-    if not items then return nil end
+    -- Prüfe ob Methoden existieren
+    if not bridge.listItems and not bridge.getItem then
+        print("FEHLER: Keine gültige ME-Methode gefunden!")
+        return nil
+    end
 
-    for _, item in pairs(items) do
-        if item.name == itemName or
-           item.displayName == itemName or
-           (item.fingerprint and item.fingerprint:find(itemName)) then
+    -- Versuche getItem() direkt wenn verfügbar
+    if bridge.getItem then
+        local success, item = pcall(function()
+            return bridge.getItem(itemName)
+        end)
+
+        if success and item then
             return item
+        end
+    end
+
+    -- Fallback: listItems()
+    if bridge.listItems then
+        local success, items = pcall(function()
+            return bridge.listItems()
+        end)
+
+        if success and items then
+            for _, item in pairs(items) do
+                if item.name == itemName or
+                   item.displayName == itemName or
+                   (item.fingerprint and item.fingerprint:find(itemName)) then
+                    return item
+                end
+            end
         end
     end
 
@@ -49,8 +72,34 @@ end
 function bank.getBalance(bridge, itemFilter)
     if not bridge then return 0 end
 
-    local items = bridge.listItems()
-    if not items then return 0 end
+    -- Prüfe ob listItems Methode existiert
+    if not bridge.listItems then
+        print("FEHLER: RS Bridge hat keine listItems() Methode!")
+        print("Verwende getItem() stattdessen...")
+
+        -- Fallback: Versuche getItem mit Filter
+        if itemFilter and bridge.getItem then
+            local success, item = pcall(function()
+                return bridge.getItem(itemFilter)
+            end)
+
+            if success and item and item.amount then
+                return item.amount
+            end
+        end
+
+        return 0
+    end
+
+    -- Versuche listItems() aufzurufen
+    local success, items = pcall(function()
+        return bridge.listItems()
+    end)
+
+    if not success or not items then
+        print("FEHLER: listItems() fehlgeschlagen: " .. tostring(items))
+        return 0
+    end
 
     local total = 0
 
@@ -284,13 +333,22 @@ function bank.createManager(rsBridgeSide, chestSide)
         return nil
     end
 
+    -- Prüfe ob Bridge gültige Methoden hat
+    if not manager.bridge.exportItem and not manager.bridge.importItem then
+        print("FEHLER: RS Bridge hat keine export/import Methoden!")
+        print("Stelle sicher dass Advanced Peripherals installiert ist.")
+        print("Bank-System deaktiviert.")
+        return nil
+    end
+
     -- Auto-detect Chip Item oder verwende Diamanten als Standard
     manager.chipItem = bank.detectChipItem(manager.chest) or bank.config.chipItem
 
     if manager.chipItem then
         print("Chip-Item: " .. manager.chipItem)
     else
-        print("WARNUNG: Kein Chip-Item erkannt")
+        print("WARNUNG: Kein Chip-Item erkannt - verwende Standard")
+        manager.chipItem = bank.config.chipItem
     end
 
     -- Methoden
