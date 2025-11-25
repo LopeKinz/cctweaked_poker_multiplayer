@@ -9,7 +9,8 @@ local config = {
     chestSide = "front",
     rsBridgeSide = "right",
     useBank = false,
-    serverTimeout = 10
+    serverTimeout = 10,
+    turnTimeout = 60  -- Sekunden für Spieler-Turn
 }
 
 -- Lade Konfig falls vorhanden
@@ -204,7 +205,9 @@ end
 
 -- Findet eigene Position in Spieler-Liste
 local function getMyPlayerIndex()
-    if not client.gameState or not client.gameState.players then return nil end
+    if not client.playerId or not client.gameState or not client.gameState.players then
+        return nil
+    end
 
     for i, player in ipairs(client.gameState.players) do
         if player.id == client.playerId then
@@ -216,6 +219,8 @@ end
 
 -- Berechnet Spieler-Position am Tisch (relativ zu eigenem Platz)
 local function getPlayerTablePosition(playerIndex)
+    if not playerIndex then return nil end
+
     local myIndex = getMyPlayerIndex()
     if not myIndex then return nil end
 
@@ -251,7 +256,7 @@ local function drawPokerTable()
     client.ui:drawPokerTable()
 
     -- Prüfe ob Zuschauer (Name beginnt mit "Zuschauer_")
-    client.isSpectator = client.playerName and client.playerName:match("^Zuschauer_") ~= nil or false
+    client.isSpectator = (client.playerName ~= nil and client.playerName:match("^Zuschauer_") ~= nil)
 
     -- Zuschauer-Overlay
     if client.isSpectator then
@@ -320,7 +325,7 @@ local function drawLobby()
     client.ui:drawPokerTable()
 
     -- Prüfe ob Zuschauer (Name beginnt mit "Zuschauer_")
-    client.isSpectator = client.playerName and client.playerName:match("^Zuschauer_") ~= nil or false
+    client.isSpectator = (client.playerName ~= nil and client.playerName:match("^Zuschauer_") ~= nil)
     local playerCount = client.gameState and #client.gameState.players or 0
     local myIndex = getMyPlayerIndex()
 
@@ -502,7 +507,7 @@ local function drawActionButtons(canCheck, currentBet, myBet, myChips, minRaise)
     -- Raise
     local callAmount = currentBet - myBet
     local raiseMinAmount = callAmount + minRaise
-    if myChips > raiseMinAmount then
+    if myChips >= raiseMinAmount then
         client.ui:addButton("raise", startX + (btnWidth + spacing) * 2, btnY, btnWidth, btnHeight, "RAISE", function()
             -- Zeige Raise-Dialog
             local minRaiseAmount = raiseMinAmount

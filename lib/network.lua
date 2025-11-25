@@ -31,9 +31,10 @@ network.MSG = {
 
 -- Initialisiert Netzwerk
 function network.init(isServer)
-    -- Finde Modem
+    -- Finde Modem (bevorzuge verkabelte Modems)
     local modem = peripheral.find("modem", function(name, wrapped)
-        return wrapped.isWireless and not wrapped.isWireless() or true
+        -- Bevorzuge nicht-wireless Modems
+        return not (wrapped.isWireless and wrapped.isWireless())
     end)
 
     if not modem then

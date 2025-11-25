@@ -38,6 +38,7 @@ local startBettingRound
 local handlePlayerAction
 local endBettingRound
 local endHand
+local isBettingRoundComplete
 
 -- Fügt Spieler hinzu
 local function addPlayer(clientId, playerName)
@@ -421,7 +422,7 @@ nextPlayer = function()
 end
 
 -- Prüft ob Wettrunde komplett ist
-function isBettingRoundComplete()
+isBettingRoundComplete = function()
     for _, player in ipairs(game.activePlayers) do
         if not player.folded and not player.allIn then
             if player.bet < game.currentBet then
@@ -495,11 +496,14 @@ endHand = function()
         winner.chips = winner.chips + game.pot
         print("Gewinner: " .. winner.name .. " (alle gefoldet)")
 
-        network.send(winner.id, network.MSG.ROUND_END, {
-            winners = {winner.id},
-            pot = game.pot,
-            reason = "all_folded"
-        })
+        -- Benachrichtige ALLE Spieler über das Rundenergebnis
+        for _, player in ipairs(game.players) do
+            network.send(player.id, network.MSG.ROUND_END, {
+                winners = {winner.id},
+                pot = game.pot,
+                reason = "all_folded"
+            })
+        end
 
     else
         -- Bewerte Hände
