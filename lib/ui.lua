@@ -1,52 +1,62 @@
--- ui.lua - Professional Poker UI with Touchscreen
+-- ui.lua - Modern Professional Poker UI with Premium Design
 local ui = {}
 
--- Farben für Poker-Tisch
+-- Premium Color Scheme - Moderne Casino-Ästhetik
 ui.COLORS = {
-    -- Tisch
-    TABLE_FELT = colors.green,
-    TABLE_BORDER = colors.brown,
-    TABLE_RAIL = colors.orange,
+    -- Tisch - Dunklerer, eleganterer Look
+    TABLE_FELT = colors.cyan,        -- Dunkles Teal statt Grün
+    TABLE_BORDER = colors.gray,      -- Dunkelgrauer Hauptrand
+    TABLE_BORDER_INNER = colors.lightGray,  -- Innerer Rand für Tiefe
+    TABLE_RAIL = colors.brown,       -- Holz-Akzent
 
-    -- Karten
+    -- Karten - Hochkontrast
     CARD_BG = colors.white,
     CARD_BACK = colors.blue,
+    CARD_BACK_PATTERN = colors.lightBlue,
     CARD_BORDER = colors.black,
+    CARD_SHADOW = colors.gray,
     CARD_RED = colors.red,
     CARD_BLACK = colors.black,
 
-    -- UI Elemente
+    -- UI Elemente - Modern & Clean
     BG = colors.black,
     PANEL = colors.gray,
-    PANEL_DARK = colors.lightGray,
+    PANEL_DARK = colors.black,
+    PANEL_LIGHT = colors.lightGray,
 
-    -- Buttons
+    -- Buttons - Kräftige Farben
     BTN_FOLD = colors.red,
-    BTN_CHECK = colors.yellow,
+    BTN_CHECK = colors.orange,
     BTN_CALL = colors.lime,
-    BTN_RAISE = colors.orange,
+    BTN_RAISE = colors.yellow,
     BTN_ALLIN = colors.purple,
     BTN_DISABLED = colors.gray,
     BTN_TEXT = colors.white,
+    BTN_BORDER = colors.black,
 
-    -- Status
-    ACTIVE = colors.yellow,
+    -- Status - Klare Indikatoren
+    ACTIVE = colors.lime,            -- Heller für aktiven Spieler
+    ACTIVE_GLOW = colors.yellow,     -- Glow-Effekt
     INACTIVE = colors.gray,
     DEALER = colors.orange,
+    DEALER_TEXT = colors.white,
     BLIND = colors.lightBlue,
 
-    -- Text
+    -- Text - Hoher Kontrast
     TEXT_WHITE = colors.white,
     TEXT_BLACK = colors.black,
     TEXT_YELLOW = colors.yellow,
+    TEXT_GOLD = colors.orange,       -- Gold-Akzent
     TEXT_GREEN = colors.lime,
     TEXT_RED = colors.red,
 
-    -- Pot und Chips
-    POT_BG = colors.brown,
+    -- Pot und Chips - Premium Look
+    POT_BG = colors.yellow,          -- Gold für Pot
+    POT_BORDER = colors.orange,
     CHIPS_GREEN = colors.lime,
     CHIPS_RED = colors.red,
     CHIPS_BLUE = colors.lightBlue,
+    CHIPS_GOLD = colors.yellow,
 }
 
 -- Erstellt neues UI
@@ -93,22 +103,23 @@ end
 function ui:calculatePlayerPositions()
     local positions = {}
 
-    -- Position 1: Links (Spieler 2)
-    positions[1] = {x = 2, y = math.floor(self.height / 2) - 4, side = "left"}
+    -- Position 1: Links
+    positions[1] = {x = 3, y = math.floor(self.height / 2) - 5, side = "left"}
 
-    -- Position 2: Oben (Spieler 3)
-    positions[2] = {x = math.floor(self.width / 2) - 10, y = 2, side = "top"}
+    -- Position 2: Oben
+    positions[2] = {x = math.floor(self.width / 2) - 12, y = 3, side = "top"}
 
-    -- Position 3: Rechts (Spieler 4)
-    positions[3] = {x = self.width - 22, y = math.floor(self.height / 2) - 4, side = "right"}
+    -- Position 3: Rechts
+    positions[3] = {x = self.width - 25, y = math.floor(self.height / 2) - 5, side = "right"}
 
-    -- Position 4: Unten/Eigen (Spieler 1) - eigene Position
-    positions[4] = {x = math.floor(self.width / 2) - 6, y = self.height - 10, side = "bottom"}
+    -- Position 4: Unten/Eigen (eigene Position)
+    positions[4] = {x = math.floor(self.width / 2) - 8, y = self.height - 12, side = "bottom"}
 
     return positions
 end
 
--- Basis-Zeichenfunktionen
+-- === BASIS-ZEICHENFUNKTIONEN ===
+
 function ui:clear(color)
     self.monitor.setBackgroundColor(color or ui.COLORS.TABLE_FELT)
     self.monitor.clear()
@@ -135,7 +146,8 @@ function ui:drawBox(x, y, width, height, color)
     end
 end
 
-function ui:drawBorder(x, y, width, height, color)
+-- Verbesserte Border mit Doppelrand-Option
+function ui:drawBorder(x, y, width, height, color, double)
     self.monitor.setBackgroundColor(color or ui.COLORS.CARD_BORDER)
     -- Oben und unten
     self.monitor.setCursorPos(x, y)
@@ -149,42 +161,96 @@ function ui:drawBorder(x, y, width, height, color)
         self.monitor.setCursorPos(x + width - 1, y + dy)
         self.monitor.write(" ")
     end
+
+    -- Doppelrand für Premium-Look
+    if double and width > 4 and height > 4 then
+        local innerColor = ui.COLORS.TABLE_BORDER_INNER
+        self.monitor.setBackgroundColor(innerColor)
+        -- Innerer Rand
+        self.monitor.setCursorPos(x + 1, y + 1)
+        self.monitor.write(string.rep(" ", width - 2))
+        self.monitor.setCursorPos(x + 1, y + height - 2)
+        self.monitor.write(string.rep(" ", width - 2))
+        for dy = 2, height - 3 do
+            self.monitor.setCursorPos(x + 1, y + dy)
+            self.monitor.write(" ")
+            self.monitor.setCursorPos(x + width - 2, y + dy)
+            self.monitor.write(" ")
+        end
+    end
 end
 
--- Zeichnet Poker-Tisch Hintergrund
+-- Schatten-Effekt
+function ui:drawShadow(x, y, width, height)
+    self.monitor.setBackgroundColor(ui.COLORS.CARD_SHADOW)
+    -- Rechter Schatten
+    for dy = 1, height do
+        if x + width <= self.width then
+            self.monitor.setCursorPos(x + width, y + dy)
+            self.monitor.write(" ")
+        end
+    end
+    -- Unterer Schatten
+    if y + height <= self.height then
+        self.monitor.setCursorPos(x + 1, y + height)
+        local shadowWidth = math.min(width, self.width - x)
+        self.monitor.write(string.rep(" ", shadowWidth))
+    end
+end
+
+-- === POKER-TISCH DESIGN ===
+
 function ui:drawPokerTable()
-    -- Tisch-Filz (grün)
+    -- Tisch-Filz (dunkles Cyan für modernen Look)
     self:clear(ui.COLORS.TABLE_FELT)
 
-    -- Tisch-Rand (braun)
-    self:drawBorder(1, 1, self.width, self.height, ui.COLORS.TABLE_BORDER)
+    -- Äußerer Rand (Holz-Look)
+    self:drawBox(1, 1, self.width, 1, ui.COLORS.TABLE_RAIL)
+    self:drawBox(1, self.height, self.width, 1, ui.COLORS.TABLE_RAIL)
+    for y = 2, self.height - 1 do
+        self:drawBox(1, y, 1, 1, ui.COLORS.TABLE_RAIL)
+        self:drawBox(self.width, y, 1, 1, ui.COLORS.TABLE_RAIL)
+    end
 
-    -- Tisch-Name oben
-    self:drawCenteredText(1, "=== TEXAS HOLD'EM ===", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_BORDER)
+    -- Innerer Doppelrand für Tiefe
+    self:drawBorder(2, 2, self.width - 2, self.height - 2, ui.COLORS.TABLE_BORDER, true)
+
+    -- Premium Titel mit Hintergrund
+    local titleWidth = 25
+    local titleX = math.floor((self.width - titleWidth) / 2)
+    self:drawBox(titleX, 2, titleWidth, 3, ui.COLORS.PANEL_DARK)
+    self:drawBorder(titleX, 2, titleWidth, 3, ui.COLORS.TEXT_GOLD)
+    self:drawCenteredText(3, "TEXAS HOLD'EM", ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
 end
 
--- Zeichnet eine Karte (verbessert)
+-- === KARTEN-DARSTELLUNG (VERBESSERT) ===
+
 function ui:drawCard(x, y, card, faceUp, large)
-    local width = large and 7 or 5
-    local height = large and 5 or 3
+    local width = large and 8 or 6
+    local height = large and 6 or 4
 
     if not faceUp or not card then
-        -- Kartenrückseite
+        -- Kartenrückseite mit Pattern
+        self:drawShadow(x, y, width, height)
         self:drawBox(x, y, width, height, ui.COLORS.CARD_BACK)
         self:drawBorder(x, y, width, height, ui.COLORS.CARD_BORDER)
 
+        -- Pattern für Kartenrückseite
         if large then
-            self:drawText(x + 1, y + 1, string.rep("#", width-2), ui.COLORS.TEXT_WHITE, ui.COLORS.CARD_BACK)
-            self:drawText(x + 1, y + 2, string.rep("#", width-2), ui.COLORS.TEXT_WHITE, ui.COLORS.CARD_BACK)
-            self:drawText(x + 1, y + 3, string.rep("#", width-2), ui.COLORS.TEXT_WHITE, ui.COLORS.CARD_BACK)
+            self:drawText(x + 2, y + 1, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
+            self:drawText(x + 2, y + 2, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
+            self:drawText(x + 2, y + 3, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
+            self:drawText(x + 2, y + 4, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
         else
-            self:drawText(x + 1, y + 1, "###", ui.COLORS.TEXT_WHITE, ui.COLORS.CARD_BACK)
+            self:drawText(x + 1, y + 1, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
+            self:drawText(x + 1, y + 2, "####", ui.COLORS.CARD_BACK_PATTERN, ui.COLORS.CARD_BACK)
         end
     else
         -- Kartenvorderseite
         local poker = require("lib.poker")
         local suitColor = poker.SUIT_COLORS[card.suit]
 
+        self:drawShadow(x, y, width, height)
         self:drawBox(x, y, width, height, ui.COLORS.CARD_BG)
         self:drawBorder(x, y, width, height, ui.COLORS.CARD_BORDER)
 
@@ -192,33 +258,48 @@ function ui:drawCard(x, y, card, faceUp, large)
         local suit = poker.SUIT_SYMBOLS[card.suit]
 
         if large then
-            -- Große Karte
-            self:drawText(x + 1, y + 1, rank, suitColor, ui.COLORS.CARD_BG)
+            -- Große Karte - besseres Layout
+            self:drawText(x + 2, y + 1, rank, suitColor, ui.COLORS.CARD_BG)
+            self:drawText(x + math.floor(width/2) - 1, y + math.floor(height/2), suit, suitColor, ui.COLORS.CARD_BG)
             self:drawText(x + math.floor(width/2), y + math.floor(height/2), suit, suitColor, ui.COLORS.CARD_BG)
-            self:drawText(x + width - 2 - (#rank > 1 and 1 or 0), y + height - 2, rank, suitColor, ui.COLORS.CARD_BG)
+            local rankX = x + width - 2 - (#rank > 1 and 1 or 0) - 1
+            self:drawText(rankX, y + height - 2, rank, suitColor, ui.COLORS.CARD_BG)
         else
             -- Normale Karte
-            if #rank == 1 then rank = " " .. rank end
             self:drawText(x + 1, y + 1, rank, suitColor, ui.COLORS.CARD_BG)
-            self:drawText(x + 2, y + 2, suit, suitColor, ui.COLORS.CARD_BG)
+            self:drawText(x + math.floor(width/2), y + 2, suit, suitColor, ui.COLORS.CARD_BG)
         end
     end
 end
 
--- Zeichnet Community Cards in der Mitte
-function ui:drawCommunityCards(cards, round)
-    local startY = math.floor(self.height / 2) - 3
-    local totalWidth = 5 * 7 + 4 * 2  -- 5 Karten * 7 breit + 4 * 2 Abstand
-    local startX = math.floor((self.width - totalWidth) / 2)
+-- === COMMUNITY CARDS (REDESIGNED) ===
 
-    -- Runden-Name
+function ui:drawCommunityCards(cards, round)
+    local cardWidth = 8
+    local cardHeight = 6
+    local spacing = 2
+    local totalWidth = 5 * cardWidth + 4 * spacing
+    local startX = math.floor((self.width - totalWidth) / 2)
+    local startY = math.floor(self.height / 2) - 5
+
+    -- Runden-Name mit Premium-Style
     if round and round ~= "waiting" then
-        self:drawCenteredText(startY - 2, string.upper(round), ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+        local roundText = string.upper(round)
+        local roundWidth = #roundText + 6
+        local roundX = math.floor((self.width - roundWidth) / 2)
+        self:drawBox(roundX, startY - 3, roundWidth, 3, ui.COLORS.PANEL_DARK)
+        self:drawBorder(roundX, startY - 3, roundWidth, 3, ui.COLORS.TEXT_GOLD)
+        self:drawCenteredText(startY - 2, roundText, ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
     end
+
+    -- Untergrund für Community Cards (Poker-Tisch Bereich)
+    local bgPadding = 3
+    self:drawBox(startX - bgPadding, startY - 1, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.PANEL_DARK)
+    self:drawBorder(startX - bgPadding, startY - 1, totalWidth + bgPadding * 2, cardHeight + 2, ui.COLORS.TABLE_BORDER)
 
     -- Zeichne 5 Karten
     for i = 1, 5 do
-        local x = startX + (i - 1) * 9
+        local x = startX + (i - 1) * (cardWidth + spacing)
         if cards and cards[i] then
             self:drawCard(x, startY, cards[i], true, true)
         else
@@ -227,127 +308,193 @@ function ui:drawCommunityCards(cards, round)
     end
 end
 
--- Zeichnet Pot in der Mitte
+-- === POT-ANZEIGE (PREMIUM DESIGN) ===
+
 function ui:drawPot(pot, y)
     y = y or math.floor(self.height / 2) + 3
 
-    local text = "POT: " .. pot .. " chips"
-    local width = #text + 4
+    local text = pot .. " CHIPS"
+    local width = #text + 8
     local x = math.floor((self.width - width) / 2)
 
-    self:drawBox(x, y, width, 3, ui.COLORS.POT_BG)
-    self:drawBorder(x, y, width, 3, ui.COLORS.TABLE_BORDER)
-    self:drawText(x + 2, y + 1, text, ui.COLORS.TEXT_YELLOW, ui.COLORS.POT_BG)
+    -- Schatten
+    self:drawShadow(x, y, width, 4)
+
+    -- Gold-Hintergrund für Pot
+    self:drawBox(x, y, width, 4, ui.COLORS.POT_BG)
+    self:drawBorder(x, y, width, 4, ui.COLORS.POT_BORDER)
+
+    -- "POT" Label
+    self:drawText(x + 2, y + 1, "POT:", ui.COLORS.PANEL_DARK, ui.COLORS.POT_BG)
+
+    -- Betrag
+    self:drawText(x + 2, y + 2, text, ui.COLORS.PANEL_DARK, ui.COLORS.POT_BG)
 end
 
--- Zeichnet Spieler-Info Box
+-- === SPIELER-BOX (MODERN REDESIGN) ===
+
 function ui:drawPlayerBox(position, player, isDealer, isSmallBlind, isBigBlind, isActive, isMe)
     local pos = self.playerPositions[position]
     if not pos then return end
 
     local x, y = pos.x, pos.y
-    local width = 20
-    local height = 8
+    local width = 24
+    local height = 10
 
-    -- Hintergrund
-    local bgColor = isActive and ui.COLORS.ACTIVE or ui.COLORS.INACTIVE
-    if isMe then bgColor = ui.COLORS.PANEL_DARK end
+    -- Schatten-Effekt
+    self:drawShadow(x, y, width, height)
+
+    -- Hintergrund basierend auf Status
+    local bgColor = ui.COLORS.PANEL
+    local borderColor = ui.COLORS.TABLE_BORDER
+
+    if isActive then
+        bgColor = ui.COLORS.PANEL_DARK
+        borderColor = ui.COLORS.ACTIVE
+    elseif isMe then
+        bgColor = ui.COLORS.PANEL_DARK
+        borderColor = ui.COLORS.TEXT_GOLD
+    end
 
     self:drawBox(x, y, width, height, bgColor)
-    self:drawBorder(x, y, width, height, ui.COLORS.TABLE_BORDER)
+    self:drawBorder(x, y, width, height, borderColor)
 
-    -- Name
-    local name = player.name or "Player"
-    if #name > width - 4 then
-        name = name:sub(1, width - 7) .. "..."
+    -- Innerer Akzent für aktiven Spieler
+    if isActive then
+        self:drawBox(x + 1, y + 1, width - 2, 1, ui.COLORS.ACTIVE_GLOW)
     end
-    self:drawText(x + 2, y + 1, name, ui.COLORS.TEXT_WHITE, bgColor)
 
-    -- Dealer/Blind Buttons
-    local buttonX = x + width - 4
+    -- Name mit Style
+    local name = player.name or "Player"
+    if #name > width - 6 then
+        name = name:sub(1, width - 9) .. "..."
+    end
+    local nameColor = isMe and ui.COLORS.TEXT_GOLD or ui.COLORS.TEXT_WHITE
+    self:drawText(x + 2, y + 1, name, nameColor, bgColor)
+
+    -- Dealer/Blind Buttons (kompakt und stylish)
+    local buttonY = y + 1
+    local buttonX = x + width - 3
+
     if isDealer then
-        self:drawText(buttonX, y + 1, " D ", ui.COLORS.TEXT_WHITE, ui.COLORS.DEALER)
+        self:drawBox(buttonX - 2, buttonY, 3, 1, ui.COLORS.DEALER)
+        self:drawText(buttonX - 1, buttonY, "D", ui.COLORS.DEALER_TEXT, ui.COLORS.DEALER)
+        buttonX = buttonX - 4
+    end
+    if isBigBlind then
+        self:drawBox(buttonX - 2, buttonY, 3, 1, ui.COLORS.BLIND)
+        self:drawText(buttonX - 1, buttonY, "B", ui.COLORS.TEXT_WHITE, ui.COLORS.BLIND)
         buttonX = buttonX - 4
     end
     if isSmallBlind then
-        self:drawText(buttonX, y + 1, "SB", ui.COLORS.TEXT_WHITE, ui.COLORS.BLIND)
-        buttonX = buttonX - 3
-    end
-    if isBigBlind then
-        self:drawText(buttonX, y + 1, "BB", ui.COLORS.TEXT_WHITE, ui.COLORS.BLIND)
+        self:drawBox(buttonX - 2, buttonY, 3, 1, ui.COLORS.BLIND)
+        self:drawText(buttonX - 1, buttonY, "S", ui.COLORS.TEXT_WHITE, ui.COLORS.BLIND)
     end
 
-    -- Chips
-    local chipsText = tostring(player.chips) .. " chips"
-    self:drawText(x + 2, y + 2, chipsText, ui.COLORS.CHIPS_GREEN, bgColor)
+    -- Chips mit Icon
+    local chipsText = player.chips .. " $"
+    self:drawText(x + 2, y + 3, chipsText, ui.COLORS.CHIPS_GOLD, bgColor)
 
-    -- Bet (wenn vorhanden)
+    -- Bet (wenn vorhanden) - hervorgehoben
     if player.bet and player.bet > 0 then
-        self:drawText(x + 2, y + 3, "Bet: " .. player.bet, ui.COLORS.TEXT_YELLOW, bgColor)
+        local betText = "BET: " .. player.bet
+        self:drawBox(x + 2, y + 4, #betText + 2, 1, ui.COLORS.BTN_RAISE)
+        self:drawText(x + 3, y + 4, betText, ui.COLORS.PANEL_DARK, ui.COLORS.BTN_RAISE)
     end
 
-    -- Status
+    -- Status mit Icons
     if player.folded then
-        self:drawText(x + 2, y + 4, "[FOLDED]", ui.COLORS.TEXT_RED, bgColor)
+        self:drawText(x + 2, y + 6, "[FOLDED]", ui.COLORS.TEXT_RED, bgColor)
     elseif player.allIn then
-        self:drawText(x + 2, y + 4, "[ALL-IN]", ui.COLORS.TEXT_YELLOW, bgColor)
+        self:drawBox(x + 2, y + 6, 9, 1, ui.COLORS.BTN_ALLIN)
+        self:drawText(x + 2, y + 6, "[ALL-IN]", ui.COLORS.TEXT_WHITE, ui.COLORS.BTN_ALLIN)
     elseif isActive then
-        self:drawText(x + 2, y + 4, "[TURN]", ui.COLORS.TEXT_GREEN, bgColor)
+        self:drawBox(x + 2, y + 6, 8, 1, ui.COLORS.ACTIVE)
+        self:drawText(x + 2, y + 6, ">> TURN", ui.COLORS.PANEL_DARK, ui.COLORS.ACTIVE)
     end
 
-    -- Karten (kleine Vorschau, verdeckt für andere)
-    local cardY = y + 6
+    -- Karten (kleine Vorschau)
+    local cardY = y + 8
     if not isMe and not player.folded then
         self:drawCard(x + 2, cardY, nil, false, false)
-        self:drawCard(x + 8, cardY, nil, false, false)
+        self:drawCard(x + 9, cardY, nil, false, false)
     end
 end
 
--- Zeichnet eigene Karten (groß unten)
+-- === EIGENE KARTEN (PREMIUM STYLE) ===
+
 function ui:drawOwnCards(cards)
     if not cards or #cards < 2 then return end
 
-    local y = self.height - 8
-    local totalWidth = 2 * 7 + 3  -- 2 Karten + Abstand
+    local cardWidth = 8
+    local cardHeight = 6
+    local spacing = 3
+    local y = self.height - 9
+    local totalWidth = 2 * cardWidth + spacing
     local startX = math.floor((self.width - totalWidth) / 2)
 
+    -- Premium Box für eigene Karten
+    local boxPadding = 4
+    local boxWidth = totalWidth + boxPadding * 2
+    local boxHeight = cardHeight + 3
+    local boxX = startX - boxPadding
+    local boxY = y - 2
+
+    self:drawBox(boxX, boxY, boxWidth, boxHeight, ui.COLORS.PANEL_DARK)
+    self:drawBorder(boxX, boxY, boxWidth, boxHeight, ui.COLORS.TEXT_GOLD)
+
     -- Label
-    self:drawText(startX, y - 1, "YOUR HAND:", ui.COLORS.TEXT_WHITE, ui.COLORS.TABLE_FELT)
+    self:drawCenteredText(boxY + 1, "YOUR HAND", ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
 
     -- Karten
     self:drawCard(startX, y, cards[1], true, true)
-    self:drawCard(startX + 10, y, cards[2], true, true)
+    self:drawCard(startX + cardWidth + spacing, y, cards[2], true, true)
 end
 
--- Zeichnet Hand-Evaluation
+-- === HAND-EVALUATION (STYLISH) ===
+
 function ui:drawHandEvaluation(handName, x, y)
     if not handName then return end
 
-    local width = #handName + 4
+    local width = #handName + 6
     x = x or math.floor((self.width - width) / 2)
     y = y or self.height - 2
 
-    self:drawBox(x, y, width, 1, ui.COLORS.TABLE_FELT)
-    self:drawText(x, y, "[" .. handName .. "]", ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+    self:drawBox(x, y, width, 1, ui.COLORS.PANEL_DARK)
+    self:drawText(x + 1, y, ">> " .. handName, ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
 end
 
--- Zeichnet Touch-Button (verbessert)
+-- === BUTTONS (MODERN DESIGN) ===
+
 function ui:drawButton(x, y, width, height, text, color, textColor, enabled)
     enabled = enabled == nil and true or enabled
     local btnColor = enabled and color or ui.COLORS.BTN_DISABLED
     local txtColor = enabled and textColor or ui.COLORS.TEXT_BLACK
 
+    -- Schatten für 3D-Effekt
+    if enabled then
+        self:drawShadow(x, y, width, height)
+    end
+
     self:drawBox(x, y, width, height, btnColor)
-    self:drawBorder(x, y, width, height, ui.COLORS.CARD_BORDER)
+    self:drawBorder(x, y, width, height, ui.COLORS.BTN_BORDER)
 
-    -- Text zentrieren
-    local textX = x + math.floor((width - #text) / 2)
-    local textY = y + math.floor(height / 2)
+    -- Highlight oben für 3D-Look
+    if enabled and height > 2 then
+        self:drawBox(x + 1, y + 1, width - 2, 1, ui.COLORS.PANEL_LIGHT)
 
-    self:drawText(textX, textY, text, txtColor, btnColor)
+        -- Text mit Offset für 3D
+        local textX = x + math.floor((width - #text) / 2)
+        local textY = y + math.floor(height / 2)
+        self:drawText(textX, textY, text, txtColor, btnColor)
+    else
+        -- Normal zentriert
+        local textX = x + math.floor((width - #text) / 2)
+        local textY = y + math.floor(height / 2)
+        self:drawText(textX, textY, text, txtColor, btnColor)
+    end
 end
 
--- Registriert Button
 function ui:addButton(id, x, y, width, height, text, callback, color, enabled)
     self.buttons[id] = {
         x = x,
@@ -362,7 +509,6 @@ function ui:addButton(id, x, y, width, height, text, callback, color, enabled)
     self:drawButton(x, y, width, height, text, color or ui.COLORS.PANEL, ui.COLORS.BTN_TEXT, enabled)
 end
 
--- Prüft Touch auf Button
 function ui:handleTouch(x, y)
     for id, button in pairs(self.buttons) do
         if button.enabled and
@@ -377,7 +523,6 @@ function ui:handleTouch(x, y)
     return nil
 end
 
--- Aktiviert/Deaktiviert Button
 function ui:setButtonEnabled(id, enabled)
     local button = self.buttons[id]
     if button then
@@ -386,120 +531,106 @@ function ui:setButtonEnabled(id, enabled)
     end
 end
 
--- Entfernt alle Buttons
 function ui:clearButtons()
     self.buttons = {}
 end
 
--- Zeichnet Raise-Buttons mit Inkrement-System
+-- === RAISE BUTTONS (VERBESSERT) ===
+
 function ui:drawRaiseButtons(min, max, current, pot, x, y, width)
     x = x or 5
     y = y or self.height - 12
     width = width or self.width - 10
 
-    -- Label mit größerem, besserem Stil
-    local labelText = "RAISE: " .. current .. " chips"
-    local labelWidth = #labelText + 4
+    -- Premium Label
+    local labelText = "RAISE: " .. current .. " $"
+    local labelWidth = #labelText + 6
     local labelX = x + math.floor((width - labelWidth) / 2)
 
-    self:drawBox(labelX, y - 2, labelWidth, 3, ui.COLORS.BTN_RAISE)
-    self:drawBorder(labelX, y - 2, labelWidth, 3, ui.COLORS.TABLE_BORDER)
-    self:drawText(labelX + 2, y, labelText, ui.COLORS.TEXT_WHITE, ui.COLORS.BTN_RAISE)
+    self:drawShadow(labelX, y - 3, labelWidth, 3)
+    self:drawBox(labelX, y - 3, labelWidth, 3, ui.COLORS.BTN_RAISE)
+    self:drawBorder(labelX, y - 3, labelWidth, 3, ui.COLORS.BTN_BORDER)
+    self:drawText(labelX + 3, y - 2, labelText, ui.COLORS.PANEL_DARK, ui.COLORS.BTN_RAISE)
 
-    -- Inkrement-Buttons in einer Reihe
-    local btnY = y + 2
+    -- Buttons
+    local btnY = y
     local btnHeight = 3
     local btnSpacing = 2
-
-    -- Berechne Button-Breiten für gleichmäßige Verteilung
-    local totalBtns = 5  -- -10, -1, POT, +1, +10
+    local totalBtns = 5
     local availableWidth = width - (btnSpacing * (totalBtns - 1))
     local btnWidth = math.floor(availableWidth / totalBtns)
-
     local currentX = x
 
-    -- -10 Button
+    -- -10
     local canDecrease10 = (current - 10) >= min
-    self:addButton("raise_dec10", currentX, btnY, btnWidth, btnHeight,
-        "-10", nil, ui.COLORS.BTN_FOLD, canDecrease10)
+    self:addButton("raise_dec10", currentX, btnY, btnWidth, btnHeight, "-10", nil, ui.COLORS.BTN_FOLD, canDecrease10)
     currentX = currentX + btnWidth + btnSpacing
 
-    -- -1 Button
+    -- -1
     local canDecrease1 = (current - 1) >= min
-    self:addButton("raise_dec1", currentX, btnY, btnWidth, btnHeight,
-        "-1", nil, ui.COLORS.BTN_FOLD, canDecrease1)
+    self:addButton("raise_dec1", currentX, btnY, btnWidth, btnHeight, "-1", nil, ui.COLORS.BTN_FOLD, canDecrease1)
     currentX = currentX + btnWidth + btnSpacing
 
-    -- POT Button (Mitte)
-    local potValue = math.min(pot, max)
-    self:addButton("raise_pot", currentX, btnY, btnWidth, btnHeight,
-        "POT", nil, ui.COLORS.BTN_ALLIN, true)
+    -- POT
+    self:addButton("raise_pot", currentX, btnY, btnWidth, btnHeight, "POT", nil, ui.COLORS.BTN_ALLIN, true)
     currentX = currentX + btnWidth + btnSpacing
 
-    -- +1 Button
+    -- +1
     local canIncrease1 = (current + 1) <= max
-    self:addButton("raise_inc1", currentX, btnY, btnWidth, btnHeight,
-        "+1", nil, ui.COLORS.BTN_CALL, canIncrease1)
+    self:addButton("raise_inc1", currentX, btnY, btnWidth, btnHeight, "+1", nil, ui.COLORS.BTN_CALL, canIncrease1)
     currentX = currentX + btnWidth + btnSpacing
 
-    -- +10 Button
+    -- +10
     local canIncrease10 = (current + 10) <= max
-    self:addButton("raise_inc10", currentX, btnY, btnWidth, btnHeight,
-        "+10", nil, ui.COLORS.BTN_CALL, canIncrease10)
+    self:addButton("raise_inc10", currentX, btnY, btnWidth, btnHeight, "+10", nil, ui.COLORS.BTN_CALL, canIncrease10)
 
-    -- Min/Max Info unter den Buttons
+    -- Info
     local infoY = btnY + btnHeight + 1
-    local minText = "Min: " .. min
-    local maxText = "Max: " .. max
-    self:drawText(x, infoY, minText, ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
-    self:drawText(x + width - #maxText, infoY, maxText, ui.COLORS.TEXT_YELLOW, ui.COLORS.TABLE_FELT)
+    self:drawText(x, infoY, "Min: " .. min, ui.COLORS.TEXT_GOLD, ui.COLORS.TABLE_FELT)
+    self:drawText(x + width - #("Max: " .. max), infoY, "Max: " .. max, ui.COLORS.TEXT_GOLD, ui.COLORS.TABLE_FELT)
 
-    -- Fortschrittsbalken für visuelle Darstellung
+    -- Premium Progress Bar
     local barY = infoY + 1
-    local barHeight = 1
-    self:drawBox(x, barY, width, barHeight, ui.COLORS.PANEL)
+    local barHeight = 2
+    self:drawBox(x, barY, width, barHeight, ui.COLORS.PANEL_DARK)
+    self:drawBorder(x, barY, width, barHeight, ui.COLORS.TABLE_BORDER)
 
-    local percent = 0
-    if max > min then
-        percent = (current - min) / (max - min)
-    else
-        percent = 1
-    end
-    local fillWidth = math.floor(width * percent)
+    local percent = (max > min) and ((current - min) / (max - min)) or 1
+    local fillWidth = math.floor((width - 2) * percent)
     if fillWidth > 0 then
-        self:drawBox(x, barY, fillWidth, barHeight, ui.COLORS.BTN_RAISE)
+        self:drawBox(x + 1, barY + 1, fillWidth, barHeight - 2, ui.COLORS.BTN_RAISE)
     end
 
-    return barY + 2  -- Return Y für weitere Elemente
+    return barY + 3
 end
 
--- Zeichnet Timer
-function ui:drawTimer(secondsLeft, x, y)
-    x = x or self.width - 15
-    y = y or 2
+-- === TIMER (MODERN) ===
 
-    local width = 13
+function ui:drawTimer(secondsLeft, x, y)
+    x = x or self.width - 16
+    y = y or 3
+
+    local width = 14
     local height = 3
 
-    self:drawBox(x, y, width, height, ui.COLORS.PANEL)
-    self:drawBorder(x, y, width, height, ui.COLORS.CARD_BORDER)
+    self:drawShadow(x, y, width, height)
+    self:drawBox(x, y, width, height, ui.COLORS.PANEL_DARK)
+    self:drawBorder(x, y, width, height, ui.COLORS.TABLE_BORDER)
 
     local color = secondsLeft > 10 and ui.COLORS.TEXT_GREEN or ui.COLORS.TEXT_RED
-    self:drawText(x + 2, y + 1, "TIME: " .. secondsLeft .. "s", color, ui.COLORS.PANEL)
+    local text = "TIME: " .. secondsLeft .. "s"
+    self:drawText(x + 2, y + 1, text, color, ui.COLORS.PANEL_DARK)
 end
 
--- Startet Timer
 function ui:startTimer(seconds)
     self.timerActive = true
     self.timerEnd = os.epoch("utc") / 1000 + seconds
 end
 
--- Stoppt Timer
 function ui:stopTimer()
     self.timerActive = false
 end
 
--- Update Timer (call in game loop)
 function ui:updateTimer()
     if self.timerActive then
         local now = os.epoch("utc") / 1000
@@ -512,27 +643,30 @@ function ui:updateTimer()
     end
 end
 
--- Zeigt Poker Hand Rankings Cheat Sheet
+-- === HAND RANKINGS (MODERN DIALOG) ===
+
 function ui:showHandRankings()
-    local dialogHeight = 24
-    local dialogWidth = math.min(50, self.width - 4)
+    local dialogHeight = 26
+    local dialogWidth = math.min(54, self.width - 4)
     local x = math.floor((self.width - dialogWidth) / 2)
     local y = math.floor((self.height - dialogHeight) / 2)
 
-    -- Dialog mit Schatten
-    self:drawBox(x + 1, y + 1, dialogWidth, dialogHeight, ui.COLORS.CARD_BORDER)  -- Schatten
+    -- Schatten
+    self:drawShadow(x, y, dialogWidth, dialogHeight)
+
+    -- Dialog
     self:drawBox(x, y, dialogWidth, dialogHeight, ui.COLORS.PANEL_DARK)
-    self:drawBorder(x, y, dialogWidth, dialogHeight, ui.COLORS.TABLE_BORDER)
+    self:drawBorder(x, y, dialogWidth, dialogHeight, ui.COLORS.TEXT_GOLD)
 
     -- Titel
-    local titleY = y + 1
-    self:drawCenteredText(titleY, "=== POKER HAND RANKINGS ===", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL_DARK)
+    local titleY = y + 2
+    self:drawCenteredText(titleY, "=== POKER HAND RANKINGS ===", ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
     self:drawCenteredText(titleY + 1, "(Beste bis Schlechteste)", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
 
-    -- Hand Rankings (von besten nach schlechtesten)
+    -- Rankings
     local rankings = {
-        {name = "1. Royal Flush", desc = "A-K-Q-J-10 gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
-        {name = "2. Straight Flush", desc = "5 aufeinander folgende Karten, gleiche Farbe", color = ui.COLORS.TEXT_YELLOW},
+        {name = "1. Royal Flush", desc = "A-K-Q-J-10 gleiche Farbe", color = ui.COLORS.TEXT_GOLD},
+        {name = "2. Straight Flush", desc = "5 aufeinander folgende, gleiche Farbe", color = ui.COLORS.TEXT_GOLD},
         {name = "3. Four of a Kind", desc = "4 Karten gleichen Werts", color = ui.COLORS.CHIPS_GREEN},
         {name = "4. Full House", desc = "3 gleiche + 2 gleiche", color = ui.COLORS.CHIPS_GREEN},
         {name = "5. Flush", desc = "5 Karten gleicher Farbe", color = ui.COLORS.CHIPS_BLUE},
@@ -543,31 +677,27 @@ function ui:showHandRankings()
         {name = "10. High Card", desc = "Höchste Karte", color = ui.COLORS.TEXT_WHITE},
     }
 
-    local currentY = y + 4
+    local currentY = y + 5
     for _, ranking in ipairs(rankings) do
-        self:drawText(x + 2, currentY, ranking.name, ranking.color, ui.COLORS.PANEL_DARK)
+        self:drawText(x + 3, currentY, ranking.name, ranking.color, ui.COLORS.PANEL_DARK)
         currentY = currentY + 1
-        self:drawText(x + 4, currentY, ranking.desc, ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
+        self:drawText(x + 5, currentY, ranking.desc, ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
         currentY = currentY + 1
     end
 
     -- Close Button
-    local btnWidth = 20
+    local btnWidth = 22
     local btnHeight = 3
     local btnX = math.floor((dialogWidth - btnWidth) / 2) + x
     local btnY = y + dialogHeight - 4
 
     self:addButton("rankings_close", btnX, btnY, btnWidth, btnHeight, "SCHLIESSEN", nil, ui.COLORS.BTN_CALL)
 
-    -- Warte auf Close
+    -- Wait
     while true do
         local event, p1, p2, p3 = os.pullEvent()
-
         if event == "monitor_touch" then
-            local touchX, touchY = p2, p3
-            local buttonId = self:handleTouch(touchX, touchY)
-
-            if buttonId == "rankings_close" then
+            if self:handleTouch(p2, p3) == "rankings_close" then
                 break
             end
         end
@@ -576,7 +706,8 @@ function ui:showHandRankings()
     self:clearButtons()
 end
 
--- Zeigt Overlay-Nachricht
+-- === MESSAGE OVERLAY (MODERN) ===
+
 function ui:showMessage(message, duration, color, large)
     local lines = {}
     for line in message:gmatch("[^\n]+") do
@@ -588,8 +719,8 @@ function ui:showMessage(message, duration, color, large)
         if #line > maxWidth then maxWidth = #line end
     end
 
-    local width = math.min(maxWidth + 4, self.width - 4)
-    local height = #lines + 2
+    local width = math.min(maxWidth + 6, self.width - 4)
+    local height = #lines + 4
     local x = math.floor((self.width - width) / 2)
     local y = math.floor((self.height - height) / 2)
 
@@ -598,14 +729,17 @@ function ui:showMessage(message, duration, color, large)
         y = y - 1
     end
 
+    -- Schatten
+    self:drawShadow(x, y, width, height)
+
     -- Box
     self:drawBox(x, y, width, height, color or ui.COLORS.PANEL)
-    self:drawBorder(x, y, width, height, ui.COLORS.TABLE_BORDER)
+    self:drawBorder(x, y, width, height, ui.COLORS.TEXT_GOLD)
 
     -- Text
     for i, line in ipairs(lines) do
         local lineX = x + math.floor((width - #line) / 2)
-        self:drawText(lineX, y + i, line, ui.COLORS.TEXT_WHITE, color or ui.COLORS.PANEL)
+        self:drawText(lineX, y + i + 1, line, ui.COLORS.TEXT_WHITE, color or ui.COLORS.PANEL)
     end
 
     if duration then
@@ -614,74 +748,59 @@ function ui:showMessage(message, duration, color, large)
     end
 end
 
--- Spieler-Auswahl Dialog
+-- === PLAYER SELECTION (MODERN) ===
+
 function ui:showPlayerSelection(players)
-    -- +3 für Titel, +3 für jeden Spieler, +3 für "Manuell", +3 für "Zuschauer"
     local dialogHeight = math.min(#players * 3 + 14, self.height - 4)
     local y = math.floor((self.height - dialogHeight) / 2)
-    local width = math.min(40, self.width - 8)
+    local width = math.min(44, self.width - 8)
     local x = math.floor((self.width - width) / 2)
 
     self:clear(ui.COLORS.TABLE_FELT)
-    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL)
-    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TABLE_BORDER)
+
+    self:drawShadow(x, y, width, dialogHeight)
+    self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL_DARK)
+    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TEXT_GOLD)
 
     -- Titel
-    self:drawCenteredText(y + 1, "SPIELER AUSWAHL", ui.COLORS.TEXT_YELLOW, ui.COLORS.PANEL)
-    self:drawCenteredText(y + 2, "Wähle deinen Namen:", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL)
+    self:drawCenteredText(y + 1, "SPIELER AUSWAHL", ui.COLORS.TEXT_GOLD, ui.COLORS.PANEL_DARK)
+    self:drawCenteredText(y + 2, "Wähle deinen Namen:", ui.COLORS.TEXT_WHITE, ui.COLORS.PANEL_DARK)
 
-    -- Spieler-Buttons
+    -- Buttons
     local btnY = y + 4
     local btnHeight = 2
     local btnWidth = width - 8
 
-    -- Cleariere Buttons
     self:clearButtons()
 
-    -- Erstelle Button für jeden Spieler
     for i, playerName in ipairs(players) do
-        local btnId = "player_" .. i
-        self:addButton(btnId, x + 4, btnY, btnWidth, btnHeight, playerName, nil, ui.COLORS.BTN_CALL)
+        self:addButton("player_" .. i, x + 4, btnY, btnWidth, btnHeight, playerName, nil, ui.COLORS.BTN_CALL)
         btnY = btnY + btnHeight + 1
-
-        -- Maximale Anzahl Buttons (falls zu viele Spieler)
         if i >= 10 then break end
     end
 
-    -- "Erneut scannen" Button
     btnY = btnY + 1
     self:addButton("rescan", x + 4, btnY, btnWidth, btnHeight, "Erneut scannen", nil, ui.COLORS.PANEL)
 
-    -- "Als Zuschauer beitreten" Button
     btnY = btnY + btnHeight + 1
     self:addButton("spectator", x + 4, btnY, btnWidth, btnHeight, "Als Zuschauer beitreten", nil, ui.COLORS.BTN_CHECK)
 
-    -- Warte auf Auswahl
     local selectedPlayer = nil
-
     while true do
         local event, p1, p2, p3 = os.pullEvent()
-
         if event == "monitor_touch" then
-            local touchX, touchY = p2, p3
-            local buttonId = self:handleTouch(touchX, touchY)
-
-            if buttonId then
-                if buttonId == "rescan" then
-                    -- Erneut scannen - Rückgabe eines speziellen Wertes
-                    selectedPlayer = "__RESCAN__"
+            local buttonId = self:handleTouch(p2, p3)
+            if buttonId == "rescan" then
+                selectedPlayer = "__RESCAN__"
+                break
+            elseif buttonId == "spectator" then
+                selectedPlayer = "Zuschauer_" .. os.getComputerID()
+                break
+            elseif buttonId then
+                local playerIndex = tonumber(buttonId:match("player_(%d+)"))
+                if playerIndex and players[playerIndex] then
+                    selectedPlayer = players[playerIndex]
                     break
-                elseif buttonId == "spectator" then
-                    -- Zuschauer-Modus
-                    selectedPlayer = "Zuschauer_" .. os.getComputerID()
-                    break
-                else
-                    -- Spieler aus Liste gewählt
-                    local playerIndex = tonumber(buttonId:match("player_(%d+)"))
-                    if playerIndex and players[playerIndex] then
-                        selectedPlayer = players[playerIndex]
-                        break
-                    end
                 end
             end
         end
@@ -691,43 +810,42 @@ function ui:showPlayerSelection(players)
     return selectedPlayer
 end
 
--- Input-Dialog für Raise-Betrag
+-- === RAISE INPUT (PREMIUM) ===
+
 function ui:showRaiseInput(min, max, pot)
-    local dialogHeight = 16
-    local y = math.floor(self.height / 2) - 8
+    local dialogHeight = 18
+    local y = math.floor(self.height / 2) - 9
     local width = self.width - 8
     local x = 4
 
-    -- Verbesserte Dialog-Box mit Schatten-Effekt
-    self:drawBox(x + 1, y + 1, width, dialogHeight, ui.COLORS.CARD_BORDER)  -- Schatten
+    -- Premium Dialog
+    self:drawShadow(x, y, width, dialogHeight)
     self:drawBox(x, y, width, dialogHeight, ui.COLORS.PANEL_DARK)
-    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TABLE_BORDER)
+    self:drawBorder(x, y, width, dialogHeight, ui.COLORS.TEXT_GOLD)
 
-    -- Titel mit Hervorhebung
+    -- Titel
     local titleY = y + 1
-    local titleWidth = 18
+    local titleWidth = 20
     local titleX = math.floor((width - titleWidth) / 2) + x
     self:drawBox(titleX, titleY, titleWidth, 3, ui.COLORS.BTN_RAISE)
-    self:drawBorder(titleX, titleY, titleWidth, 3, ui.COLORS.TABLE_BORDER)
-    self:drawCenteredText(titleY + 1, "=== RAISE ===", ui.COLORS.TEXT_WHITE, ui.COLORS.BTN_RAISE)
+    self:drawBorder(titleX, titleY, titleWidth, 3, ui.COLORS.BTN_BORDER)
+    self:drawCenteredText(titleY + 1, "=== RAISE ===", ui.COLORS.PANEL_DARK, ui.COLORS.BTN_RAISE)
 
-    -- Pot Info
+    -- Pot
     local potY = y + 5
-    local potText = "Pot: " .. pot .. " chips"
+    local potText = "POT: " .. pot .. " $"
     local potWidth = #potText + 4
     local potX = math.floor((width - potWidth) / 2) + x
     self:drawBox(potX, potY, potWidth, 3, ui.COLORS.POT_BG)
-    self:drawBorder(potX, potY, potWidth, 3, ui.COLORS.TABLE_BORDER)
-    self:drawText(potX + 2, potY + 1, potText, ui.COLORS.TEXT_YELLOW, ui.COLORS.POT_BG)
+    self:drawBorder(potX, potY, potWidth, 3, ui.COLORS.POT_BORDER)
+    self:drawText(potX + 2, potY + 1, potText, ui.COLORS.PANEL_DARK, ui.COLORS.POT_BG)
 
-    -- Inkrement-Buttons
+    -- Raise Buttons
     local current = min
     local buttonsY = y + 9
-    local buttonsWidth = width - 4
+    self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
 
-    self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
-
-    -- Aktions-Buttons (RAISE, ALL-IN, CANCEL)
+    -- Action Buttons
     local actionBtnY = y + dialogHeight - 3
     local btnWidth = math.floor((width - 10) / 3)
     local btnHeight = 2
@@ -736,41 +854,33 @@ function ui:showRaiseInput(min, max, pot)
     self:addButton("raise_allin", x + 4 + btnWidth, actionBtnY, btnWidth, btnHeight, "ALL-IN", nil, ui.COLORS.BTN_ALLIN)
     self:addButton("raise_cancel", x + 6 + btnWidth * 2, actionBtnY, btnWidth, btnHeight, "CANCEL", nil, ui.COLORS.BTN_FOLD)
 
-    -- Rückgabe: Warte auf Touch
     local result = {amount = current, action = nil}
 
     while true do
         local event, p1, p2, p3 = os.pullEvent()
-
         if event == "monitor_touch" then
-            local touchX, touchY = p2, p3
+            local buttonId = self:handleTouch(p2, p3)
 
-            -- Check Buttons
-            local buttonId = self:handleTouch(touchX, touchY)
-
-            -- Inkrement-Buttons
             if buttonId == "raise_dec10" then
                 current = math.max(min, current - 10)
                 result.amount = current
-                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
             elseif buttonId == "raise_dec1" then
                 current = math.max(min, current - 1)
                 result.amount = current
-                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
             elseif buttonId == "raise_inc1" then
                 current = math.min(max, current + 1)
                 result.amount = current
-                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
             elseif buttonId == "raise_inc10" then
                 current = math.min(max, current + 10)
                 result.amount = current
-                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
             elseif buttonId == "raise_pot" then
-                current = math.min(pot, max)
-                current = math.max(min, current)  -- Sicherstellen dass >= min
+                current = math.max(min, math.min(pot, max))
                 result.amount = current
-                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, buttonsWidth)
-            -- Aktions-Buttons
+                self:drawRaiseButtons(min, max, current, pot, x + 2, buttonsY, width - 4)
             elseif buttonId == "raise_confirm" then
                 result.action = "raise"
                 break

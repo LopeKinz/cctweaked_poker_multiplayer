@@ -282,7 +282,16 @@ startGame = function()
 
     game.currentBet = config.bigBlind
 
-    -- Benachrichtige Clients
+    -- Benachrichtige Clients über Spielstart
+    print("Sende GAME_START an alle Clients...")
+    for _, player in ipairs(game.players) do
+        network.send(player.id, network.MSG.GAME_START, {})
+    end
+
+    -- Kurze Pause damit alle Clients GAME_START verarbeiten können
+    sleep(0.5)
+
+    -- Sende aktuellen Spielstatus
     broadcastGameState()
 
     -- Starte erste Wettrunde
