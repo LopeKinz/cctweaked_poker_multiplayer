@@ -40,8 +40,34 @@ function runtime.debug(enabled, ...)
     end
 end
 
+local function applyValidators(config, defaults, validators)
+    if type(validators) ~= "table" then
+        return config
+    end
+
+    for _, rule in ipairs(validators) do
+        local key = rule.key
+        local validate = rule.validate
+
+        if key and type(validate) == "function" then
+            local ok, sanitized, warnMsg = pcall(validate, config[key], config, defaults)
+            if not ok then
+                runtime.warn("Konfiguration", key, "ungültig:", tostring(sanitized), "- verwende Standardwert")
+                config[key] = defaults[key]
+            elseif sanitized == nil then
+                runtime.warn("Konfiguration", key, "ungültig:", warnMsg or "verwende Standardwert")
+                config[key] = defaults[key]
+            else
+                config[key] = sanitized
+            end
+        end
+    end
+
+    return config
+end
+
 -- Shallow merge defaults with overrides from a Lua table returned by path
-function runtime.loadConfig(defaults, path)
+function runtime.loadConfig(defaults, path, validators)
     local merged = {}
     for k, v in pairs(defaults or {}) do
         merged[k] = v
@@ -60,6 +86,8 @@ function runtime.loadConfig(defaults, path)
             end
         end
     end
+
+    merged = applyValidators(merged, defaults or {}, validators)
 
     return merged
 end

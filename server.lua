@@ -25,7 +25,125 @@ local defaultConfig = {
     debug = false             -- Debug output
 }
 
-local config = runtime.loadConfig(defaultConfig, "config.lua")
+local configValidators = {
+    {
+        key = "minPlayers",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.minPlayers, "minPlayers muss eine Zahl sein"
+            end
+
+            value = math.max(2, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "maxPlayers",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.maxPlayers, "maxPlayers muss eine Zahl sein"
+            end
+
+            value = math.floor(value)
+            if value < (cfg.minPlayers or defaults.minPlayers) then
+                return cfg.minPlayers or defaults.minPlayers, "maxPlayers darf nicht kleiner als minPlayers sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "smallBlind",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.smallBlind, "smallBlind muss eine Zahl sein"
+            end
+
+            value = math.max(1, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "bigBlind",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.bigBlind, "bigBlind muss eine Zahl sein"
+            end
+
+            value = math.max(cfg.smallBlind or defaults.smallBlind, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "startingChips",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" then
+                return defaults.startingChips, "startingChips muss eine Zahl sein"
+            end
+
+            value = math.max(cfg.bigBlind or defaults.bigBlind, math.floor(value))
+            return value
+        end
+    },
+    {
+        key = "turnTimeout",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value <= 0 then
+                return defaults.turnTimeout, "turnTimeout muss > 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "gameStartDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.gameStartDelay, "gameStartDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "roundTransitionDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.roundTransitionDelay, "roundTransitionDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "showdownDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.showdownDelay, "showdownDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "errorRebootDelay",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value < 0 then
+                return defaults.errorRebootDelay, "errorRebootDelay muss >= 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "debug",
+        validate = function(value, cfg, defaults)
+            return value == true
+        end
+    }
+}
+
+local config = runtime.loadConfig(defaultConfig, "config.lua", configValidators)
 
 -- Spielleiter (erster Spieler der beitritt)
 local gameMaster = nil
@@ -80,9 +198,13 @@ local function addPlayer(clientId, playerName, initialChips)
         end
     end
 
-    -- Verwende Client-Chips falls vorhanden, sonst Standardwert
+    -- Verwende Client-Chips falls vorhanden, aber deckel auf Server-Config
     local startChips = tonumber(initialChips) or config.startingChips
     if startChips < 0 then
+        runtime.warn("Startchips kleiner als 0 - setze auf Standardwert")
+        startChips = config.startingChips
+    elseif startChips > config.startingChips then
+        runtime.warn("Startchips von", playerName, "auf", startChips, "begrenzt auf", config.startingChips)
         startChips = config.startingChips
     end
 
@@ -341,7 +463,8 @@ startGame = function()
     placeBet(smallBlindPlayer, config.smallBlind)
     placeBet(bigBlindPlayer, config.bigBlind)
 
-    game.currentBet = config.bigBlind
+    -- Setze currentBet auf den tatsächlich geposteten Big Blind (auch bei Short Stacks)
+    game.currentBet = bigBlindPlayer.bet
 
     -- Benachrichtige Clients über Spielstart
     runtime.info("Sende GAME_START an alle Clients...")
@@ -435,12 +558,38 @@ startBettingRound = function()
             local senderId = param1
             local message = param2
 
-            if message.type == network.MSG.ACTION and senderId == currentPlayer.id then
+            if type(message) ~= "table" or not message.type then
+                runtime.warn("Ungültige Nachricht während Wettrunde von", tostring(senderId))
+            elseif message.type == network.MSG.ACTION and senderId == currentPlayer.id then
                 os.cancelTimer(timeoutTimer)
                 local action = message.data.action
                 local amount = message.data.amount or 0
                 handlePlayerAction(senderId, action, amount)
                 break
+            elseif message.type == network.MSG.LEAVE then
+                removePlayer(senderId)
+
+                if senderId == currentPlayer.id then
+                    os.cancelTimer(timeoutTimer)
+
+                    if game.round ~= "waiting" and game.activePlayers and #game.activePlayers > 0 then
+                        nextPlayer()
+                    end
+
+                    break
+                end
+            elseif message.type == network.MSG.JOIN then
+                addPlayer(senderId, message.data and message.data.playerName, message.data and message.data.chips)
+            elseif message.type == network.MSG.READY then
+                setPlayerReady(senderId, message.data and message.data.ready)
+            elseif message.type == network.MSG.PING then
+                network.send(senderId, network.MSG.PONG, {})
+            elseif message.type == network.MSG.HEARTBEAT then
+                network.send(senderId, network.MSG.PONG, {})
+                local pingedPlayer = getPlayer(senderId)
+                if pingedPlayer then
+                    pingedPlayer.connected = true
+                end
             end
         end
     end
@@ -678,9 +827,12 @@ endHand = function()
 
         -- Verteile Pot
         local winAmount = math.floor(game.pot / #winners)
-        for _, winnerId in ipairs(winners) do
+        local remainder = game.pot - (winAmount * #winners)
+
+        for index, winnerId in ipairs(winners) do
             local winner = getPlayer(winnerId)
-            winner.chips = winner.chips + winAmount
+            local bonus = (index <= remainder) and 1 or 0
+            winner.chips = winner.chips + winAmount + bonus
             runtime.info("Gewinner:", winner.name, "mit", bestHand.name)
         end
 
@@ -827,6 +979,12 @@ local function main()
 
             elseif msgType == network.MSG.PING then
                 network.send(senderId, network.MSG.PONG, {})
+            elseif msgType == network.MSG.HEARTBEAT then
+                network.send(senderId, network.MSG.PONG, {})
+                local heartbeatPlayer = getPlayer(senderId)
+                if heartbeatPlayer then
+                    heartbeatPlayer.connected = true
+                end
             else
                 runtime.debug(config.debug, "Ignoriere unbekannte Nachricht", msgType, "von", senderId)
             end

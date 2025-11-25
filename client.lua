@@ -18,7 +18,36 @@ local defaultConfig = {
     debug = false
 }
 
-local config = runtime.loadConfig(defaultConfig, "config.lua")
+local configValidators = {
+    {
+        key = "serverTimeout",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value <= 0 then
+                return defaults.serverTimeout, "serverTimeout muss > 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "turnTimeout",
+        validate = function(value, cfg, defaults)
+            if type(value) ~= "number" or value <= 0 then
+                return defaults.turnTimeout, "turnTimeout muss > 0 sein"
+            end
+
+            return value
+        end
+    },
+    {
+        key = "debug",
+        validate = function(value)
+            return value == true
+        end
+    }
+}
+
+local config = runtime.loadConfig(defaultConfig, "config.lua", configValidators)
 
 -- Client-Status
 local client = {
