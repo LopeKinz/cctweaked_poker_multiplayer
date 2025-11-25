@@ -610,21 +610,24 @@ endHand = function()
     -- Warte kurz
     sleep(5)
 
-    -- Prüfe ob Spiel weitergeht
-    local playersWithChips = 0
+    -- IMMER zurück zur Lobby nach einer Runde
+    print("Runde beendet - zurueck zur Lobby")
+
+    -- Sende GAME_END an alle
     for _, player in ipairs(game.players) do
-        if player.chips > 0 then
-            playersWithChips = playersWithChips + 1
-        end
+        network.send(player.id, network.MSG.GAME_END, {
+            message = "Runde beendet"
+        })
     end
 
-    if playersWithChips >= config.minPlayers then
-        startGame()
-    else
-        print("Nicht genug Spieler mit Chips!")
-        game.round = "waiting"
-        broadcastGameState()
-    end
+    -- Zurück zu Wartezustand
+    game.round = "waiting"
+    game.pot = 0
+    game.currentBet = 0
+    game.communityCards = {}
+
+    -- Sende Update
+    broadcastGameState()
 end
 
 -- Konvertiert activePlayers-Index zu players-Index
