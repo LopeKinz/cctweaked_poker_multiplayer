@@ -1,4 +1,5 @@
 -- network.lua - Netzwerk Kommunikations-Bibliothek
+local runtime = require("lib.runtime")
 local network = {}
 
 network.PROTOCOL = "POKER_MP"
@@ -29,26 +30,52 @@ network.MSG = {
     PONG = "PONG"
 }
 
--- Initialisiert Netzwerk
-function network.init(isServer)
-    -- Finde Modem (bevorzuge verkabelte Modems)
-    local modem = peripheral.find("modem", function(name, wrapped)
-        -- Bevorzuge nicht-wireless Modems
+local function findModem()
+    local ok, modem = pcall(peripheral.find, "modem", function(_, wrapped)
         return not (wrapped.isWireless and wrapped.isWireless())
     end)
 
-    if not modem then
-        error("Kein Modem gefunden!")
+    if ok and modem then
+        return modem
     end
 
-    -- Öffne Rednet
-    rednet.open(peripheral.getName(modem))
+    -- Letzte Chance: irgendein Modem akzeptieren
+    ok, modem = pcall(peripheral.find, "modem")
+    if ok and modem then
+        return modem
+    end
+
+    error("Kein Modem gefunden!")
+end
+
+-- Initialisiert Netzwerk
+function network.init(isServer)
+    local modem = findModem()
+
+    runtime.info("Nutze Modem", peripheral.getName(modem))
+    local ok, err = pcall(rednet.open, peripheral.getName(modem))
+    if not ok then
+        error("Rednet konnte nicht geoeffnet werden: " .. tostring(err))
+    end
 
     if isServer then
-        rednet.host(network.PROTOCOL, "poker_server")
+        runtime.safeCall("rednet.host", rednet.host, network.PROTOCOL, "poker_server")
     end
 
     return modem
+end
+
+local function safeSend(target, message)
+    local ok, err
+    if target then
+        ok, err = pcall(rednet.send, target, message, network.PROTOCOL)
+    else
+        ok, err = pcall(rednet.broadcast, message, network.PROTOCOL)
+    end
+
+    if not ok then
+        runtime.warn("Senden fehlgeschlagen:", tostring(err))
+    end
 end
 
 -- Sendet Nachricht
@@ -59,19 +86,20 @@ function network.send(target, msgType, data)
         timestamp = os.epoch("utc")
     }
 
-    if target then
-        rednet.send(target, message, network.PROTOCOL)
-    else
-        rednet.broadcast(message, network.PROTOCOL)
-    end
+    safeSend(target, message)
 end
 
 -- Empfängt Nachricht (mit Timeout)
 function network.receive(timeout)
     timeout = timeout or network.TIMEOUT
-    local senderId, message, protocol = rednet.receive(network.PROTOCOL, timeout)
+    local ok, senderId, message, protocol = pcall(rednet.receive, network.PROTOCOL, timeout)
 
-    if senderId and message and message.type then
+    if not ok then
+        runtime.warn("Netzwerkempfang fehlgeschlagen:", tostring(senderId))
+        return nil, nil, nil
+    end
+
+    if senderId and message and type(message) == "table" and message.type then
         return senderId, message.type, message.data
     end
 
@@ -106,16 +134,16 @@ function network.findServer(timeout)
     timeout = timeout or 5
     local infinite = (timeout == 0)
 
-    local serverId = rednet.lookup(network.PROTOCOL, "poker_server")
-    if serverId then
+    local ok, serverId = pcall(rednet.lookup, network.PROTOCOL, "poker_server")
+    if ok and serverId then
         return serverId
     end
 
     -- Warte auf Server
     local startTime = os.epoch("utc")
     while infinite or (os.epoch("utc") - startTime) / 1000 < timeout do
-        serverId = rednet.lookup(network.PROTOCOL, "poker_server")
-        if serverId then
+        ok, serverId = pcall(rednet.lookup, network.PROTOCOL, "poker_server")
+        if ok and serverId then
             return serverId
         end
         sleep(0.5)
@@ -126,10 +154,10 @@ end
 
 -- Schließt Netzwerk
 function network.close()
-    rednet.unhost(network.PROTOCOL)
+    runtime.safeCall("rednet.unhost", rednet.unhost, network.PROTOCOL)
     local modem = peripheral.find("modem")
     if modem then
-        rednet.close(peripheral.getName(modem))
+        runtime.safeCall("rednet.close", rednet.close, peripheral.getName(modem))
     end
 end
 

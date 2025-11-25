@@ -1,27 +1,24 @@
 -- client.lua - Professional Poker Client mit Touch-UI
+-- Mit strukturierterem Logging, defensiverer Fehlerbehandlung und
+-- konfigurierbaren Standardwerten.
 local poker = require("lib.poker")
 local network = require("lib.network")
 local ui = require("lib.ui")
 local bank = require("lib.bank")
+local runtime = require("lib.runtime")
 
--- Konfiguration
-local config = {
+local defaultConfig = {
     playerDetectorSide = "left",
     chestSide = "front",
     rsBridgeSide = "right",
     useBank = false,
     chipItem = "minecraft:diamond",  -- 1 Diamant = 1 Chip
     serverTimeout = 10,
-    turnTimeout = 60  -- Sekunden für Spieler-Turn
+    turnTimeout = 60,  -- Sekunden für Spieler-Turn
+    debug = false
 }
 
--- Lade Konfig falls vorhanden
-if fs.exists("config.lua") then
-    local customConfig = dofile("config.lua")
-    for k, v in pairs(customConfig) do
-        config[k] = v
-    end
-end
+local config = runtime.loadConfig(defaultConfig, "config.lua")
 
 -- Client-Status
 local client = {
@@ -43,16 +40,20 @@ local client = {
     isSpectator = false,  -- Ist dieser Client Zuschauer?
 }
 
+local function logDebug(...)
+    runtime.debug(config.debug, ...)
+end
+
 -- Findet Peripherie
 local function findPeripherals()
-    print("Suche Peripherie...")
+    runtime.info("Suche Peripherie...")
 
     -- Monitor
     client.monitor = peripheral.find("monitor")
     if not client.monitor then
         error("Kein Monitor gefunden!")
     end
-    print("Monitor gefunden: " .. peripheral.getName(client.monitor))
+    runtime.info("Monitor gefunden:", peripheral.getName(client.monitor))
 
     -- UI initialisieren
     client.ui = ui.new(client.monitor)
@@ -61,18 +62,18 @@ local function findPeripherals()
     client.chest = peripheral.find("minecraft:chest") or
                    peripheral.wrap(config.chestSide)
     if client.chest then
-        print("Truhe gefunden: " .. peripheral.getName(client.chest))
+        runtime.info("Truhe gefunden:", peripheral.getName(client.chest))
     else
-        print("WARNUNG: Keine Truhe gefunden!")
+        runtime.warn("Keine Truhe gefunden!")
     end
 
     -- Player Detector
     client.playerDetector = peripheral.find("player_detector") or
                             peripheral.wrap(config.playerDetectorSide)
     if client.playerDetector then
-        print("Player Detector gefunden")
+        runtime.info("Player Detector gefunden")
     else
-        print("WARNUNG: Kein Player Detector gefunden!")
+        runtime.warn("Kein Player Detector gefunden!")
     end
 
     -- RS Bridge und Bank-System (optional)
@@ -80,25 +81,25 @@ local function findPeripherals()
         client.rsbridge = peripheral.find("rs_bridge") or
                          peripheral.wrap(config.rsBridgeSide)
         if client.rsbridge and client.chest then
-            print("RS Bridge gefunden")
+            runtime.info("RS Bridge gefunden")
 
             -- Initialisiere Bank-Manager
             client.bankManager = bank.createManager(config.rsBridgeSide, config.chestSide)
 
             if client.bankManager then
-                print("Bank-System aktiviert!")
-                print("Chip-Item: " .. (client.bankManager.chipItem or config.chipItem))
+                runtime.info("Bank-System aktiviert!")
+                runtime.info("Chip-Item:", (client.bankManager.chipItem or config.chipItem))
 
                 -- Setze Chip-Item falls nicht auto-erkannt
                 if not client.bankManager.chipItem then
                     client.bankManager.chipItem = config.chipItem
                 end
             else
-                print("WARNUNG: Bank-Manager konnte nicht erstellt werden")
+                runtime.warn("Bank-Manager konnte nicht erstellt werden")
                 config.useBank = false
             end
         else
-            print("WARNUNG: RS Bridge oder Truhe nicht gefunden (Bank deaktiviert)")
+            runtime.warn("RS Bridge oder Truhe nicht gefunden (Bank deaktiviert)")
             config.useBank = false
         end
     end
@@ -113,24 +114,18 @@ local function countChips()
 
         if client.chest then
             local chestSize = client.chest.size()
-            if config.debug then
-                print("DEBUG: Truhe hat " .. chestSize .. " Slots")
-            end
+            logDebug("Truhe hat " .. chestSize .. " Slots")
 
             for slot = 1, chestSize do
                 local item = client.chest.getItemDetail(slot)
                 if item and item.name == config.chipItem then
-                    if config.debug then
-                        print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
-                    end
+                    logDebug("Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
                     chestChips = chestChips + item.count
                 end
             end
         end
 
-        if config.debug then
-            print("DEBUG: ME Balance = " .. meBalance .. ", Truhe Chips = " .. chestChips)
-        end
+        logDebug("ME Balance = " .. meBalance .. ", Truhe Chips = " .. chestChips)
         return meBalance + chestChips
     else
         -- Standard: Zähle nur in Truhe
@@ -138,23 +133,17 @@ local function countChips()
 
         local total = 0
         local chestSize = client.chest.size()
-        if config.debug then
-            print("DEBUG: Truhe hat " .. chestSize .. " Slots")
-        end
+        logDebug("Truhe hat " .. chestSize .. " Slots")
 
         for slot = 1, chestSize do
             local item = client.chest.getItemDetail(slot)
             if item and item.name == config.chipItem then
-                if config.debug then
-                    print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
-                end
+                logDebug("Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
                 total = total + item.count
             end
         end
 
-        if config.debug then
-            print("DEBUG: Gesamt Chips = " .. total)
-        end
+        logDebug("Gesamt Chips = " .. total)
         return total
     end
 end
@@ -165,16 +154,16 @@ local function syncChipsWithBank(targetChips)
         return
     end
 
-    print("Synchronisiere Chips mit Bank...")
-    print("Ziel: " .. targetChips .. " Chips")
+    runtime.info("Synchronisiere Chips mit Bank...")
+    runtime.info("Ziel:", targetChips, "Chips")
 
     -- Synchronisiere
     local success, result = client.bankManager:sync(targetChips)
 
     if success then
-        print("Chips synchronisiert: " .. (result or 0) .. " transferiert")
+        runtime.info("Chips synchronisiert:", (result or 0), "transferiert")
     else
-        print("WARNUNG: Chip-Sync fehlgeschlagen: " .. tostring(result))
+        runtime.warn("Chip-Sync fehlgeschlagen:", tostring(result))
     end
 end
 
@@ -196,17 +185,17 @@ end
 -- Spieler auswählen
 local function selectPlayer()
     while true do
-        print("Erkenne Spieler in der Nähe...")
+        runtime.info("Erkenne Spieler in der Nähe...")
 
         local players = detectPlayer()
 
         if not players or #players == 0 then
             -- Keine Spieler erkannt - trotzdem Auswahhliste zeigen
-            print("Keine Spieler erkannt")
+            runtime.warn("Keine Spieler erkannt")
             client.ui:showMessage("Keine Spieler in Reichweite!\nErneut scannen möglich", 2, ui.COLORS.BTN_CHECK)
         else
             -- Spieler erkannt - Info anzeigen
-            print("Spieler erkannt: " .. #players)
+            runtime.info("Spieler erkannt:", #players)
             client.ui:showMessage("Spieler erkannt: " .. #players .. "\nWähle deinen Namen", 2, ui.COLORS.BTN_CALL)
         end
 
@@ -216,7 +205,7 @@ local function selectPlayer()
 
         -- Wenn "__RESCAN__" zurückgegeben wird, scanne erneut
         if selectedName == "__RESCAN__" then
-            print("Scanne erneut...")
+            runtime.info("Scanne erneut...")
             client.ui:showMessage("Scanne erneut...", 1, ui.COLORS.BTN_CHECK)
             -- Loop continues
         else
@@ -231,12 +220,12 @@ local function connectToServer()
     client.ui:clear()
     client.ui:showMessage("Suche Server...\nWarte bis Server online ist...", nil, ui.COLORS.PANEL)
 
-    print("Suche Server (endlos bis gefunden)...")
+    runtime.info("Suche Server (endlos bis gefunden)...")
 
     -- Versuche unendlich Server zu finden (timeout = 0)
     client.serverId = network.findServer(0)
 
-    print("Server gefunden! ID: " .. client.serverId)
+    runtime.info("Server gefunden! ID:", client.serverId)
 
     -- Spieler auswählen (mit Touch-Liste)
     client.playerName = selectPlayer()
@@ -245,7 +234,7 @@ local function connectToServer()
         error("Kein Spielername ausgewählt!")
     end
 
-    print("Spieler ausgewählt: " .. client.playerName)
+    runtime.info("Spieler ausgewählt:", client.playerName)
 
     -- Verbinde
     client.ui:showMessage("Verbinde...", nil, ui.COLORS.BTN_CALL)
@@ -254,7 +243,7 @@ local function connectToServer()
     local myChips = nil
     if config.useBank then
         myChips = countChips()
-        print("Bank aktiviert - Chips: " .. myChips)
+        runtime.info("Bank aktiviert - Chips:", myChips)
     end
 
     -- Versuche endlos mit Server zu verbinden
@@ -275,14 +264,14 @@ local function connectToServer()
             connected = true
 
             if client.isGameMaster then
-                print("Verbunden! ID: " .. client.playerId .. " (SPIELLEITER)")
+                runtime.info("Verbunden! ID:", client.playerId, "(SPIELLEITER)")
                 client.ui:showMessage("Verbunden!\nDu bist SPIELLEITER!", 2, ui.COLORS.BTN_CALL)
             else
-                print("Verbunden! ID: " .. client.playerId)
+                runtime.info("Verbunden! ID:", client.playerId)
                 client.ui:showMessage("Verbunden!", 2, ui.COLORS.BTN_CALL)
             end
         else
-            print("Keine Antwort, versuche erneut...")
+            runtime.warn("Keine Antwort, versuche erneut...")
             client.ui:showMessage("Verbinde...\nVersuche erneut...", nil, ui.COLORS.BTN_CHECK)
             sleep(2)
         end
@@ -656,9 +645,7 @@ end
 
 -- Behandelt Spielstatus-Update
 local function handleGameState(state)
-    if config.debug then
-        print("DEBUG: handleGameState() aufgerufen, round=" .. (state.round or "nil"))
-    end
+    logDebug("handleGameState() aufgerufen, round=" .. (state.round or "nil"))
 
     client.gameState = state
 
@@ -682,16 +669,12 @@ end
 
 -- Behandelt "Your Turn"
 local function handleYourTurn(data)
-    if config.debug then
-        print("DEBUG: handleYourTurn() aufgerufen!")
-        print("DEBUG: canCheck=" .. tostring(data.canCheck) .. ", currentBet=" .. tostring(data.currentBet))
-    end
+    logDebug("handleYourTurn() aufgerufen!")
+    logDebug("canCheck=" .. tostring(data.canCheck) .. ", currentBet=" .. tostring(data.currentBet))
 
     -- Zuschauer bekommen keinen Turn
     if client.isSpectator then
-        if config.debug then
-            print("DEBUG: Bin Zuschauer, keine Buttons")
-        end
+        logDebug("Bin Zuschauer, keine Buttons")
         return
     end
 
@@ -707,14 +690,12 @@ local function handleYourTurn(data)
     end
 
     if not myPlayer then
-        print("FEHLER: Eigene Spielerdaten nicht gefunden! Client-ID: " .. tostring(client.playerId))
+        runtime.error("Eigene Spielerdaten nicht gefunden! Client-ID:", tostring(client.playerId))
         client.ui:showMessage("FEHLER:\nSpielerdaten nicht gefunden!", 3, ui.COLORS.BTN_FOLD)
         return
     end
 
-    if config.debug then
-        print("DEBUG: myPlayer gefunden: chips=" .. myPlayer.chips .. ", bet=" .. myPlayer.bet)
-    end
+    logDebug("myPlayer gefunden: chips=" .. myPlayer.chips .. ", bet=" .. myPlayer.bet)
 
     -- Sync Chips JETZT (wenn am Zug) - non-blocking
     if config.useBank then
@@ -727,9 +708,7 @@ local function handleYourTurn(data)
     -- Zeichne Tisch und Buttons
     drawPokerTable()
 
-    if config.debug then
-        print("DEBUG: Zeichne Action-Buttons...")
-    end
+    logDebug("Zeichne Action-Buttons...")
 
     drawActionButtons(
         data.canCheck,
@@ -739,9 +718,7 @@ local function handleYourTurn(data)
         data.minRaise
     )
 
-    if config.debug then
-        print("DEBUG: Action-Buttons gezeichnet!")
-    end
+    logDebug("Action-Buttons gezeichnet!")
 
     -- Starte Timer
     client.ui:startTimer(config.turnTimeout or 60)
@@ -814,23 +791,23 @@ local function handleEvents()
 
                 elseif msgType == network.MSG.GAME_START then
                     -- Spiel startet
-                    print("Game starting...")
+                    runtime.info("Game starting...")
 
                 elseif msgType == network.MSG.PLAYER_JOINED then
-                    print("Spieler beigetreten: " .. data.playerName)
+                    runtime.info("Spieler beigetreten:", data.playerName)
                     if client.gameState and client.gameState.round == "waiting" then
                         drawLobby()
                     end
 
                 elseif msgType == network.MSG.PLAYER_LEFT then
-                    print("Spieler verlassen: " .. data.playerName)
+                    runtime.warn("Spieler verlassen:", data.playerName)
                     if client.gameState and client.gameState.round == "waiting" then
                         drawLobby()
                     end
 
                 elseif msgType == network.MSG.GAME_END then
                     -- Spiel beendet - zurück zur Lobby
-                    print("Spiel beendet - zurueck zur Lobby")
+                    runtime.info("Spiel beendet - zurueck zur Lobby")
                     client.ui:stopTimer()
                     client.ui:clearButtons()
                     client.myCards = {}
@@ -890,7 +867,7 @@ end
 
 -- Hauptprogramm
 local function main()
-    print("=== Professional Poker Client ===")
+    runtime.info("=== Professional Poker Client ===")
 
     -- Initialisiere
     findPeripherals()
@@ -921,16 +898,16 @@ while true do
             client.ui:clear(ui.COLORS.BG)
             client.ui:showMessage("FEHLER:\n" .. tostring(err) .. "\n\nNeustart in 30s...", nil, ui.COLORS.BTN_FOLD)
         end
-        print("===================")
-        print("FEHLER: " .. tostring(err))
-        print("===================")
-        print("Automatischer Neustart in 30 Sekunden...")
+        runtime.error("===================")
+        runtime.error("FEHLER:", tostring(err))
+        runtime.error("===================")
+        runtime.warn("Automatischer Neustart in 30 Sekunden...")
         network.close()
 
         -- 30 Sekunden Wartezeit
         sleep(30)
 
-        print("Neustart...")
+        runtime.info("Neustart...")
         os.reboot()
     else
         break
