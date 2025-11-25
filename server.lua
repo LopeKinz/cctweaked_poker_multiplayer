@@ -327,11 +327,16 @@ startGame = function()
     -- Kurze Pause damit alle Clients GAME_START verarbeiten können
     sleep(0.5)
 
-    -- Sende aktuellen Spielstatus
+    -- Setze ersten Spieler am Zug (nach Big Blind)
+    game.currentPlayerIndex = ((game.dealerIndex + 2) % #game.activePlayers) + 1
+
+    -- Sende aktuellen Spielstatus (mit richtigem currentPlayerIndex)
     broadcastGameState()
 
+    -- Kurze Pause damit GAME_STATE beim Client ankommt
+    sleep(0.5)
+
     -- Starte erste Wettrunde
-    game.currentPlayerIndex = ((game.dealerIndex + 2) % #game.activePlayers) + 1
     startBettingRound()
 end
 
