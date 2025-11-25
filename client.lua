@@ -36,6 +36,7 @@ local client = {
     playerDetector = nil,
     rsbridge = nil,
     bankManager = nil,  -- Bank-Manager wenn useBank = true
+    initialChips = 0,  -- Chips beim Spielstart (für Bank-Sync)
     connected = false,
     ready = false,
     myPosition = nil,  -- Position am Tisch (1-4)
@@ -626,15 +627,8 @@ local function handleGameState(state)
         client.myCards = state.myCards
     end
 
-    -- Synchronisiere Chips mit Bank wenn nötig
-    if config.useBank and client.playerId then
-        for _, player in ipairs(state.players) do
-            if player.id == client.playerId then
-                syncChipsWithBank(player.chips)
-                break
-            end
-        end
-    end
+    -- KEINE Chip-Sync während des Spiels!
+    -- Nur am Ende des Spiels synchronisieren
 
     if state.round == "waiting" then
         drawLobby()
@@ -702,15 +696,8 @@ local function handleRoundEnd(data)
 
     client.ui:showMessage(message, 5, ui.COLORS.BTN_CALL, true)
 
-    -- Synchronisiere Chips nach Runde
-    if config.useBank and client.playerId and client.gameState then
-        for _, player in ipairs(client.gameState.players) do
-            if player.id == client.playerId then
-                syncChipsWithBank(player.chips)
-                break
-            end
-        end
-    end
+    -- KEINE Chip-Sync nach Runde!
+    -- Nur am Ende des kompletten Spiels synchronisieren
 
     client.ready = false
     client.ui:clearButtons()
@@ -742,9 +729,18 @@ local function handleEvents()
                     handleRoundEnd(data)
 
                 elseif msgType == network.MSG.GAME_START then
-                    -- Don't draw yet - wait for GAME_STATE to arrive
-                    -- Just show brief message overlay
+                    -- Spiel startet - speichere initiale Chips für Bank-Sync
                     print("Game starting...")
+
+                    if config.useBank and client.playerId and client.gameState then
+                        for _, player in ipairs(client.gameState.players) do
+                            if player.id == client.playerId then
+                                client.initialChips = player.chips
+                                print("Initiale Chips gespeichert: " .. client.initialChips)
+                                break
+                            end
+                        end
+                    end
 
                 elseif msgType == network.MSG.PLAYER_JOINED then
                     print("Spieler beigetreten: " .. data.playerName)
@@ -765,11 +761,27 @@ local function handleEvents()
                     client.ui:clearButtons()
                     client.myCards = {}
 
-                    -- Synchronisiere finale Chips mit Bank
+                    -- FINALE Chip-Synchronisierung basierend auf Gewinn/Verlust
                     if config.useBank and client.playerId and client.gameState then
                         for _, player in ipairs(client.gameState.players) do
                             if player.id == client.playerId then
-                                syncChipsWithBank(player.chips)
+                                local finalChips = player.chips
+                                local diff = finalChips - client.initialChips
+
+                                print("=== BANK SYNCHRONISIERUNG ===")
+                                print("Start: " .. client.initialChips .. " | Ende: " .. finalChips)
+                                print("Differenz: " .. diff)
+
+                                if diff > 0 then
+                                    print("GEWINN: +" .. diff .. " Diamanten")
+                                elseif diff < 0 then
+                                    print("VERLUST: " .. diff .. " Diamanten")
+                                else
+                                    print("UNENTSCHIEDEN: Keine Veraenderung")
+                                end
+
+                                -- Synchronisiere auf finale Chips
+                                syncChipsWithBank(finalChips)
                                 break
                             end
                         end
