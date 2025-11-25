@@ -75,7 +75,7 @@ function bank.getBalance(bridge, itemFilter)
 end
 
 -- Exportiert Items aus ME System in Truhe
-function bank.withdraw(bridge, chest, itemName, amount)
+function bank.withdraw(bridge, chest, itemName, amount, direction)
     if not bridge or not chest then
         return false, "Bridge oder Truhe nicht verfunden"
     end
@@ -88,23 +88,28 @@ function bank.withdraw(bridge, chest, itemName, amount)
         return false, "Betrag zu groß"
     end
 
-    -- Exportiere Items
-    local success, result = pcall(function()
-        return bridge.exportItem({
-            name = itemName,
-            count = amount
-        }, "down") -- Annahme: Truhe ist unter der Bridge
-    end)
+    -- Versuche alle Richtungen wenn keine angegeben
+    local directions = direction and {direction} or {"down", "up", "north", "south", "east", "west"}
 
-    if not success then
-        return false, "Export fehlgeschlagen: " .. tostring(result)
+    for _, dir in ipairs(directions) do
+        local success, result = pcall(function()
+            return bridge.exportItem({
+                name = itemName,
+                count = amount
+            }, dir)
+        end)
+
+        if success and result and result > 0 then
+            print("Erfolgreich exportiert: " .. result .. " Items in Richtung " .. dir)
+            return true, result
+        end
     end
 
-    return true, result
+    return false, "Export fehlgeschlagen in alle Richtungen"
 end
 
 -- Importiert Items von Truhe in ME System
-function bank.deposit(bridge, chest, itemName, amount)
+function bank.deposit(bridge, chest, itemName, amount, direction)
     if not bridge or not chest then
         return false, "Bridge oder Truhe nicht gefunden"
     end
@@ -130,45 +135,65 @@ function bank.deposit(bridge, chest, itemName, amount)
         return false, "Keine Items zum Einzahlen gefunden"
     end
 
+    -- Versuche alle Richtungen wenn keine angegeben
+    local directions = direction and {direction} or {"down", "up", "north", "south", "east", "west"}
+
     -- Importiere Items
     local totalImported = 0
 
     for _, itemInfo in ipairs(itemsToDeposit) do
-        local success, result = pcall(function()
-            return bridge.importItem({
-                fromSlot = itemInfo.slot,
-                count = itemInfo.count
-            }, "down")
-        end)
+        local imported = false
+        for _, dir in ipairs(directions) do
+            local success, result = pcall(function()
+                return bridge.importItem({
+                    fromSlot = itemInfo.slot,
+                    count = itemInfo.count
+                }, dir)
+            end)
 
-        if success and result then
-            totalImported = totalImported + itemInfo.count
+            if success and result and result > 0 then
+                totalImported = totalImported + result
+                imported = true
+                print("Erfolgreich importiert: " .. result .. " Items aus Richtung " .. dir)
+                break
+            end
+        end
+        if not imported then
+            print("WARNUNG: Konnte Slot " .. itemInfo.slot .. " nicht importieren")
         end
     end
 
-    return true, totalImported
+    return totalImported > 0, totalImported
 end
 
 -- Auto-Deposit: Alle Items aus Truhe ins ME System
-function bank.autoDeposit(bridge, chest)
+function bank.autoDeposit(bridge, chest, direction)
     if not bridge or not chest then
         return false, "Bridge oder Truhe nicht gefunden"
     end
+
+    -- Versuche alle Richtungen wenn keine angegeben
+    local directions = direction and {direction} or {"down", "up", "north", "south", "east", "west"}
 
     local totalDeposited = 0
 
     for slot = 1, chest.size() do
         local item = chest.getItemDetail(slot)
         if item then
-            local success, count = pcall(function()
-                return bridge.importItem({
-                    fromSlot = slot,
-                    count = item.count
-                }, "down")
-            end)
+            local deposited = false
+            for _, dir in ipairs(directions) do
+                local success, count = pcall(function()
+                    return bridge.importItem({
+                        fromSlot = slot,
+                        count = item.count
+                    }, dir)
+                end)
 
-            if success and count then
-                totalDeposited = totalDeposited + count
+                if success and count and count > 0 then
+                    totalDeposited = totalDeposited + count
+                    deposited = true
+                    break
+                end
             end
         end
     end

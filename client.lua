@@ -112,27 +112,37 @@ local function countChips()
         local chestChips = 0
 
         if client.chest then
-            for slot = 1, client.chest.size() do
+            local chestSize = client.chest.size()
+            print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+
+            for slot = 1, chestSize do
                 local item = client.chest.getItemDetail(slot)
                 if item and item.name == config.chipItem then
+                    print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
                     chestChips = chestChips + item.count
                 end
             end
         end
 
+        print("DEBUG: ME Balance = " .. meBalance .. ", Truhe Chips = " .. chestChips)
         return meBalance + chestChips
     else
         -- Standard: Zähle nur in Truhe
         if not client.chest then return 0 end
 
         local total = 0
-        for slot = 1, client.chest.size() do
+        local chestSize = client.chest.size()
+        print("DEBUG: Truhe hat " .. chestSize .. " Slots")
+
+        for slot = 1, chestSize do
             local item = client.chest.getItemDetail(slot)
-            if item then
+            if item and item.name == config.chipItem then
+                print("DEBUG: Slot " .. slot .. " hat " .. item.count .. " " .. item.name)
                 total = total + item.count
             end
         end
 
+        print("DEBUG: Gesamt Chips = " .. total)
         return total
     end
 end
@@ -782,11 +792,13 @@ local function handleEvents()
                         end
                     end
 
-                    -- Warte kurz damit GAME_STATE ankommt
-                    sleep(0.5)
-                    if client.gameState and client.gameState.round == "waiting" then
-                        drawLobby()
+                    -- Setze round direkt auf "waiting" damit Lobby sofort angezeigt wird
+                    if client.gameState then
+                        client.gameState.round = "waiting"
                     end
+
+                    -- Zeige Lobby sofort
+                    drawLobby()
 
                 elseif msgType == network.MSG.ERROR then
                     client.ui:showMessage("FEHLER: " .. data.message, 3, ui.COLORS.BTN_FOLD)
