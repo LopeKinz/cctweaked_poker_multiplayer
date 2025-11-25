@@ -248,7 +248,9 @@ startGame = function()
     -- Reset Spielstatus
     game.activePlayers = {}
     for _, player in ipairs(game.players) do
-        if player.chips > 0 then
+        -- Zuschauer (Name beginnt mit "Zuschauer_") werden übersprungen
+        local isSpectator = player.name:match("^Zuschauer_") ~= nil
+        if player.chips > 0 and not isSpectator then
             player.folded = false
             player.allIn = false
             player.bet = 0

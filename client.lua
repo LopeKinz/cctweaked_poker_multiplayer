@@ -250,6 +250,9 @@ local function drawPokerTable()
     -- Tisch-Hintergrund
     client.ui:drawPokerTable()
 
+    -- Prüfe ob Zuschauer (Name beginnt mit "Zuschauer_")
+    client.isSpectator = client.playerName and client.playerName:match("^Zuschauer_") ~= nil or false
+
     -- Zuschauer-Overlay
     if client.isSpectator then
         local y = 2
@@ -316,10 +319,10 @@ end
 local function drawLobby()
     client.ui:drawPokerTable()
 
-    -- Prüfe ob Zuschauer (mehr als 4 Spieler)
+    -- Prüfe ob Zuschauer (Name beginnt mit "Zuschauer_")
+    client.isSpectator = client.playerName and client.playerName:match("^Zuschauer_") ~= nil or false
     local playerCount = client.gameState and #client.gameState.players or 0
     local myIndex = getMyPlayerIndex()
-    client.isSpectator = (myIndex and myIndex > 4) or false
 
     -- Zuschauer-Modus
     if client.isSpectator then
@@ -657,8 +660,9 @@ local function handleEvents()
                     handleRoundEnd(data)
 
                 elseif msgType == network.MSG.GAME_START then
-                    client.ui:showMessage("Spiel startet!", 2, ui.COLORS.BTN_CALL)
-                    drawPokerTable()
+                    -- Don't draw yet - wait for GAME_STATE to arrive
+                    -- Just show brief message overlay
+                    print("Game starting...")
 
                 elseif msgType == network.MSG.PLAYER_JOINED then
                     print("Spieler beigetreten: " .. data.playerName)

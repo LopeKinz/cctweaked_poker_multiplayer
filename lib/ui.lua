@@ -744,7 +744,7 @@ function ui:showMessage(message, duration, color, large)
 
     if duration then
         sleep(duration)
-        self:drawPokerTable()
+        -- Don't auto-redraw - let the caller decide what to draw after
     end
 end
 
