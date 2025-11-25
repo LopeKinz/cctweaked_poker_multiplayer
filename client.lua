@@ -228,11 +228,19 @@ local function connectToServer()
     -- Verbinde
     client.ui:showMessage("Verbinde...", nil, ui.COLORS.BTN_CALL)
 
+    -- Zähle aktuelle Chips (wenn useBank = true)
+    local myChips = nil
+    if config.useBank then
+        myChips = countChips()
+        print("Bank aktiviert - Chips: " .. myChips)
+    end
+
     -- Versuche endlos mit Server zu verbinden
     local connected = false
     while not connected do
         network.send(client.serverId, network.MSG.JOIN, {
-            playerName = client.playerName
+            playerName = client.playerName,
+            chips = myChips  -- Sende Chip-Anzahl (nil wenn useBank = false)
         })
 
         -- Warte auf Willkommen

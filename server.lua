@@ -41,7 +41,7 @@ local endHand
 local isBettingRoundComplete
 
 -- Fügt Spieler hinzu
-local function addPlayer(clientId, playerName)
+local function addPlayer(clientId, playerName, initialChips)
     if #game.players >= config.maxPlayers then
         network.send(clientId, network.MSG.ERROR, {message = "Spiel ist voll"})
         return false
@@ -55,10 +55,13 @@ local function addPlayer(clientId, playerName)
         end
     end
 
+    -- Verwende Client-Chips falls vorhanden, sonst Standardwert
+    local startChips = initialChips or config.startingChips
+
     local player = {
         id = clientId,
         name = playerName,
-        chips = config.startingChips,
+        chips = startChips,
         cards = {},
         bet = 0,
         folded = false,
@@ -324,11 +327,16 @@ startGame = function()
     -- Kurze Pause damit alle Clients GAME_START verarbeiten können
     sleep(0.5)
 
-    -- Sende aktuellen Spielstatus
+    -- Setze ersten Spieler am Zug (nach Big Blind)
+    game.currentPlayerIndex = ((game.dealerIndex + 2) % #game.activePlayers) + 1
+
+    -- Sende aktuellen Spielstatus (mit richtigem currentPlayerIndex)
     broadcastGameState()
 
+    -- Kurze Pause damit GAME_STATE beim Client ankommt
+    sleep(0.5)
+
     -- Starte erste Wettrunde
-    game.currentPlayerIndex = ((game.dealerIndex + 2) % #game.activePlayers) + 1
     startBettingRound()
 end
 
@@ -714,7 +722,7 @@ local function main()
 
         if senderId and msgType then
             if msgType == network.MSG.JOIN then
-                addPlayer(senderId, data.playerName)
+                addPlayer(senderId, data.playerName, data.chips)
 
             elseif msgType == network.MSG.READY then
                 setPlayerReady(senderId, data.ready)
